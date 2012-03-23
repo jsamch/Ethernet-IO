@@ -11,33 +11,49 @@ import bitstring
 
 # Custom classes
 import dac
+import adc
  
 IO_UDP_PORT = 1234
 
 MAGIC_ID   = '\xCA'  # Magic byte indicating EtherIO Frame
 VERSION    = '\x21'  # Version 2, Rev 1 of protocol
 # Control Word BitFields
-CTRL_FRAMETYPE_IOUPDATE = 1 # Normal IO Update Frame
-CTRL_FRAMETYPE_CONFIG   = 8 # Configuration Frame
-CTRL_FRAMETYPE_DAC_CFG  = 5 # DAC Configuration
+CTRL_FRAMETYPE_IOUPDATE = 0x01 # Normal IO Update Frame
+CTRL_FRAMETYPE_IORESP   = 0x81 # Normal IO Response Frame
+CTRL_FRAMETYPE_CONFIG   = 0x08 # Configuration Frame
+CTRL_FRAMETYPE_DAC_CFG  = 0x05 # DAC Configuration
+
+CTRL_FRAMETYPE_ERROR    = 0xF0 # Error Frame (Error string)
 
 class EtherIO:
-    def __init__(self, IPAddr, Port = IO_UDP_PORT):
-        self.IPAddr     = IPAddr
-        self.port       = Port
+    def __init__(self, EIO_IP, Host_IP='0.0.0.0',
+                               EIO_Port = IO_UDP_PORT, 
+                               Host_Port = IO_UDP_PORT):
+        self.EIO_IP     = EIO_IP
+        self.EIO_Port   = EIO_Port
+        self.Host_IP    = Host_IP
+        self.Host_Port  = Host_Port
+
         self.DACs       = []
+        self.ADCs       = []
         for ii in range(8):
            self.DACs.append(dac.DAC())
+           self.ADCs.append(adc.ADC())        
+
         self.curSeq     = 0xabcd
         self.pad        = 0xBB
+        
         self.sock       = socket.socket( socket.AF_INET, # Internet
                                          socket.SOCK_DGRAM ) # UDP
-#        self.dacconfig  = 2*[0x4444]
+        
+        # Bind it for reception of responses
+        self.sock.bind( (self.Host_IP, self.Host_Port ))
 
+        self.Debug      = True
 
     def __unicode__(self):
         ret = "EtherIO : "
-        ret += "IP=%s,Port=%d" % (self.IPAddr, self.Port)
+        ret += "IP=%s,Port=%d" % (self.EIO_IP, self.EIO_Port)
         return(ret)
 
     # Call this method when you modify the DAC range or enable status
@@ -78,6 +94,42 @@ class EtherIO:
         self.curSeq += 1
 
 
-        self.sock.sendto( packet, (self.IPAddr, self.port) )
+        self.sock.sendto( packet, (self.EIO_IP, self.EIO_Port) )
         
+    # Reception and analysis
+    def InterpretRcvFrame( self, RawData ):
+        # Basic sanity check
+        if RawData[0] != MAGIC_ID:
+            print "Error: Bad Magic"
+            return( False )
+        if RawData[1] != VERSION:
+            print "Error: Bad Expected Protocol Version/Revision"
+            return( False )
+        header = struct.unpack_from("!ccBBH",RawData)
+        Headers = {}
+        Headers["frameType"] = header[2]
+        Headers["sequence"]  = header[4]
+        print Headers
+        if Headers["frameType"] == CTRL_FRAMETYPE_IORESP:
+            print binascii.hexlify(RawData[6:])
+            body = struct.unpack_from("!IIIIIIIIIIHHHHHHHH", RawData[6:])
+
+            print body
+        else:
+            print "uninterpreted body"
+
+
+    # Blocking Receiving Loop (should go in its own thread) and
+    # be called repeatedly
+    def RcvLoop(self, TimeOut=None):
+        if TimeOut != None:
+            self.sock.settimeout(TimeOut)
+        data, addr = self.sock.recvfrom(1024)
+        if len(data) > 0:  # else it indicates a timeout
+            if data[2] == '\xf0':
+              print "Error Message Received from EtherIO:", data[3:]
+            else:
+              if self.Debug:
+                print "Raw Received Message (HEX): ", binascii.hexlify(data).upper()
+              self.InterpretRcvFrame( data )
 
