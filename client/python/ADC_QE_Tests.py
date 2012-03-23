@@ -13,6 +13,7 @@ import socket
 
 import etherio
 
+rate = 100;
 class ThreadClass(threading.Thread):
     def __init__(self, ReceivingLoop):
         threading.Thread.__init__(self)
@@ -26,7 +27,7 @@ class ThreadClass(threading.Thread):
         while(True):            
             if self.keepGoing:
                 try:
-                    self.rcvcallfunction(TimeOut=0.5)
+                    self.rcvcallfunction(TimeOut=0.5/rate)
                 except socket.timeout:
                     None
             else:
@@ -39,14 +40,19 @@ class ThreadClass(threading.Thread):
 eio = etherio.EtherIO( '192.168.1.205' )
 t   = ThreadClass(eio.RcvLoop)
 t.start()
+count = 0
 
 while(True):
     try:
-        print "Sending Frame"
+        count = count+1;
+        if count%rate == 0:
+            print "\nSending Frame ", count
+            eio.printQEs()
+            eio.printADCs()
         eio.sendFrame()
-        time.sleep(1)
+        time.sleep(1.0/rate)
     except KeyboardInterrupt:
-        print "Terminating Receiver Thread"
+        print "\nTerminating Receiver Thread"
         t.keepGoing = False;
         time.sleep(1)
         break

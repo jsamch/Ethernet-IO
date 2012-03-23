@@ -12,6 +12,7 @@ import bitstring
 # Custom classes
 import dac
 import adc
+import quadrature
  
 IO_UDP_PORT = 1234
 
@@ -36,9 +37,12 @@ class EtherIO:
 
         self.DACs       = []
         self.ADCs       = []
+        self.QEs        = [] # Quadrature Encoders
         for ii in range(8):
            self.DACs.append(dac.DAC())
            self.ADCs.append(adc.ADC())        
+        for ii in range(10):
+           self.QEs.append(quadrature.QuadEnc())
 
         self.curSeq     = 0xabcd
         self.pad        = 0xBB
@@ -49,7 +53,7 @@ class EtherIO:
         # Bind it for reception of responses
         self.sock.bind( (self.Host_IP, self.Host_Port ))
 
-        self.Debug      = True
+        self.Debug      = False
 
     def __unicode__(self):
         ret = "EtherIO : "
@@ -109,12 +113,19 @@ class EtherIO:
         Headers = {}
         Headers["frameType"] = header[2]
         Headers["sequence"]  = header[4]
-        print Headers
+        #print Headers
         if Headers["frameType"] == CTRL_FRAMETYPE_IORESP:
-            print binascii.hexlify(RawData[6:])
             body = struct.unpack_from("!IIIIIIIIIIHHHHHHHH", RawData[6:])
+             
+            quad_val = body[0:10]
+            adc_val  = body[10:18]
 
-            print body
+            for ii in range(10):
+                self.QEs[ii].updateValue( bitstring.pack('uint:32',quad_val[ii] ))
+            
+            for ii in range(8):
+                self.ADCs[ii].updateVoltage( bitstring.pack('uint:16', adc_val[ii]))
+
         else:
             print "uninterpreted body"
 
@@ -132,4 +143,14 @@ class EtherIO:
               if self.Debug:
                 print "Raw Received Message (HEX): ", binascii.hexlify(data).upper()
               self.InterpretRcvFrame( data )
+
+    def printQEs(self):
+        for ii in range(10):
+            print (self.QEs[ii].Position),
+        print;
+            
+    def printADCs(self):
+        for ii in range(8):
+            print (self.ADCs[ii].Voltage),
+        print;
 

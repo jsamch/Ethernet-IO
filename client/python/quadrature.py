@@ -10,7 +10,9 @@ class QuadEnc:
     def __init__(self):
         self.Position = None # Not yet Received
         
-    def updateVoltage(self, BitsReceived):
-        print BitsReceived
+    def updateValue(self, BitsReceived):
+        if BitsReceived[9] == 1:
+            BitsReceived[0:8]= 0xff
 
-
+        self.Position = BitsReceived.unpack('int:32')[0]
+        #print "QuadEnc: ", BitsReceived[0:32], " Pos=", self.Position
