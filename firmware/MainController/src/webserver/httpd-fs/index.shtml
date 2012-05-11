@@ -1,0 +1,54 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+  <head>
+    <title>EtherIO Controller</title>
+    <!-- load Dojo -->
+    <script src="http://ajax.googleapis.com/ajax/libs/dojo/1.6.0/dojo/dojo.xd.js"></script>
+    <script>
+dojo.ready(function(){
+   dojo.byId("dojo").innerHTML += " version: " + dojo.version;
+});
+    </script>
+    <script>
+dojo.xhrGet({    
+    url: "fpga.json",
+    // success callback    
+    load: function(jsonRawData) {
+        // The embedded web server returns some crap as last char.  Take it out.
+        var jsonData = jsonRawData.slice(0, -2)        
+        dojo.byId("jsonData").innerHTML = jsonData;
+        var jsonObj = dojo.fromJson( jsonData );
+        console.log( jsonObj );
+    },
+    // The error handler
+    error: function() {
+        // Do nothing -- keep old content there
+    }
+});    
+    </script>
+        
+  </head>
+  <BODY onLoad="window.setTimeout(&quot;location.href='index.shtml'&quot;,100000)">
+<font face="arial">
+<h1>Tactile Labs EtherIO Controller</h1>
+
+<a href="http://www.tactilelabs.com" name="Tactile Labs">Tactile Labs Inc.</a>
+
+<hr>
+
+<h2>Firmware Information</h2>
+%! fw-version
+
+<h2>IO Values</h2><br>
+%! fpga-io
+<p>
+
+<h4 id="dojo">Dojo</h4>
+
+<h4 id="jsonData">Field</h4>
+
+</pre></font>
+</font>
+</body>
+</html>
+
