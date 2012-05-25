@@ -22,11 +22,12 @@ class EIOCentralWidget(QWidget):
         super(EIOCentralWidget, self).__init__(parent)
 
         # widgets which will be contained in the central widget
-        self.dac0 = DACGroupBox("DAC 0", 0.0)
+        self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
 
         # layout of the widgets
         layout = QGridLayout()
-        layout.addWidget(self.dac0)
+        for i in range(len(self.dac)):
+            layout.addWidget(self.dac[i], 0, i)
 
         self.setLayout(layout)
 
@@ -39,10 +40,20 @@ class DACGroupBox(QGroupBox):
 
         # DAC value
         self.value = value
+        
+        # group box properites
+        # self.setCheckable(True)
 
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
         self.DACText = QLineEdit("%7.4f V" % self.value)
+
+        # slider settings
+        self.DACSlider.setMinimum(-100)
+        self.DACSlider.setMaximum(100)
+        self.DACSlider.setTickInterval(50)
+        self.DACSlider.setTickPosition(QSlider.TicksLeft)
+        self.DACSlider.setMinimumHeight(150)
 
         # layout
         layout = QVBoxLayout()
