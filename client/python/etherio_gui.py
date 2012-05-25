@@ -46,7 +46,7 @@ class DACGroupBox(QGroupBox):
 
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
-        self.DACText = QLineEdit("%7.4f V" % self.value)
+        self.DACText = QLineEdit()
 
         # slider settings
         self.DACSlider.setMinimum(-100)
@@ -54,6 +54,15 @@ class DACGroupBox(QGroupBox):
         self.DACSlider.setTickInterval(50)
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
+        
+        # line settings
+        self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
+        self.validator.setNotation(QDoubleValidator.StandardNotation)
+
+        self.DACText.setValidator(self.validator)
+        #self.DACText.setInputMask("#00.0000")
+
+        self.DACText.setText("%6.4f" % self.value)
 
         # layout
         layout = QVBoxLayout()
