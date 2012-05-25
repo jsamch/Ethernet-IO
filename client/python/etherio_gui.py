@@ -21,16 +21,35 @@ class EIOCentralWidget(QWidget):
     def __init__(self, parent=None):
         super(EIOCentralWidget, self).__init__(parent)
 
-        # widgets
-        self.DACslider0 = QSlider(Qt.Vertical)
+        # widgets which will be contained in the central widget
+        self.dac0 = DACGroupBox("DAC 0", 0.0)
 
-        # layout
+        # layout of the widgets
         layout = QGridLayout()
-        layout.addWidget(self.DACslider0)
+        layout.addWidget(self.dac0)
 
         self.setLayout(layout)
 
-        # button signal
+        # signals
+
+class DACGroupBox(QGroupBox):
+
+    def __init__(self, parent=None, name="DAC #", value=0.0):
+        super(DACGroupBox, self).__init__(parent)
+
+        # DAC value
+        self.value = value
+
+        # widgets in the box
+        self.DACSlider = QSlider(Qt.Vertical)
+        self.DACText = QLineEdit("%7.4f V" % self.value)
+
+        # layout
+        layout = QVBoxLayout()
+        layout.addWidget(self.DACSlider, 0, Qt.AlignHCenter)
+        layout.addWidget(self.DACText)
+
+        self.setLayout(layout)
 
 if __name__ == '__main__':
     # create the app
