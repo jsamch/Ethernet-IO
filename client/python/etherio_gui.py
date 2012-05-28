@@ -22,6 +22,8 @@ class EIOCentralWidget(QWidget):
         super(EIOCentralWidget, self).__init__(parent)
 
         # widgets which will be contained in the central widget
+        self.settings = EIOSettings()
+
         self.dacFrame = QFrame() #QGroupBox("DACs")
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
@@ -36,7 +38,9 @@ class EIOCentralWidget(QWidget):
 
         # layout of the widgets
         centralLayout = QVBoxLayout()
-        centralLayout.setSpacing(0)
+        centralLayout.setSpacing(0) #spacing between the frames below
+
+        centralLayout.addWidget(self.settings)
         centralLayout.addWidget(self.dacFrame)
         centralLayout.addWidget(self.adcFrame)
         centralLayout.addWidget(self.quadFrame)
@@ -59,6 +63,48 @@ class EIOCentralWidget(QWidget):
         self.quadFrame.setLayout(quadLayout)
 
         # signals
+
+class EIOSettings(QFrame):
+
+    def __init__(self, parent=None):
+        super(EIOSettings, self).__init__(parent)
+
+        self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
+
+        # connection status
+        self.connected = False
+        
+        # widgets
+        self.label = QLabel("Settings")
+        
+        self.ipLabel = QLabel("IP: ")
+        self.ipInput = QLineEdit("192.168.2.200")
+
+        self.udpLabel = QLabel("UDP port: ")
+        self.udpInput = QLineEdit("1234")
+
+        self.rangeLabel = QLabel("DAC range: ")
+        self.rangeSelect = QComboBox()
+        self.rangeSelect.addItems(["-10 to 10", "-10.8 to 10.8", "-5 to 5",
+        "0 to 10.8", "0 to 10", "0 to 5"])
+
+        self.connect = QPushButton("connect")
+
+        # layout
+        self.layout = QGridLayout()
+        
+        self.layout.addWidget(self.label, 0, 0)
+        self.layout.addWidget(self.ipLabel, 1, 0)
+        self.layout.addWidget(self.ipInput, 1, 1)
+        self.layout.addWidget(self.udpLabel, 2, 0)
+        self.layout.addWidget(self.udpInput, 2, 1)
+        self.layout.addWidget(self.rangeLabel, 3, 0)
+        self.layout.addWidget(self.rangeSelect, 3, 1)
+        self.layout.addWidget(self.connect, 1, 2)
+        self.layout.addWidget(QFrame(self), 0, 3)
+        self.layout.setColumnStretch(3, 1)
+
+        self.setLayout(self.layout)
 
 class DACGroupBox(QGroupBox):
 
