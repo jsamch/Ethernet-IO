@@ -4,7 +4,7 @@
 import sys
 from PySide.QtCore import *
 from PySide.QtGui import *
-
+import unicodedata
 
 class EIOWindow(QMainWindow):
 
@@ -123,12 +123,12 @@ class DACGroupBox(QGroupBox):
         self.DACText = QLineEdit()
 
         # slider settings
-        self.DACSlider.setMinimum(-100)
-        self.DACSlider.setMaximum(100)
-        self.DACSlider.setTickInterval(50)
+        self.DACSlider.setMinimum(-20)
+        self.DACSlider.setMaximum(20)
+        self.DACSlider.setTickInterval(10)
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
-        
+
         # line settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
@@ -145,6 +145,19 @@ class DACGroupBox(QGroupBox):
 
         self.setLayout(layout)
 
+        # signals
+        self.DACSlider.valueChanged.connect(self.changeValue)
+        self.DACText.returnPressed.connect(self.changeValue)
+
+    def changeValue(self, newValue=None):
+        if self.sender() == self.DACSlider:
+            self.value = self.DACSlider.value()/2.0
+            self.DACText.setText("%6.4f" % self.value)
+        elif self.sender() == self.DACText:
+            self.value = (float)(self.DACText.text())
+            self.DACSlider.setValue(self.value*2.0)
+            self.DACText.setText("%6.4f" % self.value)
+        
 class ADCGroupBox(QGroupBox):
     
     def __init__(self, parent=None, name="ADC #"):
@@ -198,6 +211,7 @@ class QuadGroupBox(QGroupBox):
 if __name__ == '__main__':
     # create the app
     app = QApplication(sys.argv)
+
     # show the form
     main = EIOWindow()
     main.show()
