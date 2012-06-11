@@ -27,7 +27,9 @@ class EIOCentralWidget(QWidget):
         self.dacFrame = QFrame() #QGroupBox("DACs")
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
-        
+        self.dacSendAll = QPushButton("send ALL")
+        self.dacSendSelected = QPushButton("send SELECTED")
+
         self.adcFrame = QFrame() #QGroupBox("ADCs")
         self.adcFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.adc = [ADCGroupBox("ADC %d" % i) for i in range(8)]
@@ -48,6 +50,8 @@ class EIOCentralWidget(QWidget):
         dacLayout = QGridLayout()
         for i in range(len(self.dac)):
             dacLayout.addWidget(self.dac[i], 0, i)
+        dacLayout.addWidget(self.dacSendAll, 1, 0, 1, 4 )
+        dacLayout.addWidget(self.dacSendSelected, 1, 4, 1, 4 )
 
         adcLayout = QGridLayout()
         for i in range(len(self.adc)):
@@ -125,6 +129,7 @@ class DACGroupBox(QGroupBox):
         self.DACMinLabel = QLabel("<font size=2>-10.0</font>")
         self.DACText = QLineEdit()
         self.DACSelect = QCheckBox()
+        self.DACSend = QPushButton("send")
 
         # slider settings
         self.DACSlider.setMinimum(-20)
@@ -155,6 +160,7 @@ class DACGroupBox(QGroupBox):
         self.layout.addWidget(self.DACMinLabel, 5, 0, Qt.AlignRight |
                 Qt.AlignBottom)
         self.layout.addWidget(self.DACText, 6, 0, 1, 2)
+        self.layout.addWidget(self.DACSend, 7, 0, 1, 2)
 
         self.setLayout(self.layout)
 
