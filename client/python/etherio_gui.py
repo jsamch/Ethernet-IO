@@ -41,7 +41,7 @@ class EIOCentralWidget(QWidget):
         centralLayout.setSpacing(0) #spacing between the frames below
 
         centralLayout.addWidget(self.settings)
-        centralLayout.addWidget(self.dacFrame)
+        centralLayout.addWidget(self.dacFrame, 1)
         centralLayout.addWidget(self.adcFrame)
         centralLayout.addWidget(self.quadFrame)
         
@@ -115,12 +115,16 @@ class DACGroupBox(QGroupBox):
         self.value = value
         
         # group box properties
-        # self.setCheckable(True)
+        #self.setCheckable(True)
         #self.setDisabled(True)
 
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
+        self.DACMaxLabel = QLabel("<font size=2>10.0</font>")
+        self.DACMidLabel = QLabel("<font size=2>0.0</font>")
+        self.DACMinLabel = QLabel("<font size=2>-10.0</font>")
         self.DACText = QLineEdit()
+        self.DACSelect = QCheckBox()
 
         # slider settings
         self.DACSlider.setMinimum(-20)
@@ -128,22 +132,31 @@ class DACGroupBox(QGroupBox):
         self.DACSlider.setTickInterval(10)
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
-
+        
         # line settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
 
+        # label settings
+
+        # input validator
         self.DACText.setValidator(self.validator)
         #self.DACText.setInputMask("#00.0000")
 
         self.DACText.setText("%6.4f" % self.value)
 
         # layout
-        layout = QVBoxLayout()
-        layout.addWidget(self.DACSlider, 0, Qt.AlignHCenter)
-        layout.addWidget(self.DACText)
+        self.layout = QGridLayout()
+        self.layout.addWidget(self.DACSelect, 0, 0, 1, 2, Qt.AlignRight)
+        self.layout.addWidget(self.DACSlider, 1, 1, 5, 1, Qt.AlignLeft)
+        self.layout.addWidget(self.DACMaxLabel, 1, 0, Qt.AlignRight |
+                Qt.AlignTop)
+        self.layout.addWidget(self.DACMidLabel, 3, 0, Qt.AlignRight)
+        self.layout.addWidget(self.DACMinLabel, 5, 0, Qt.AlignRight |
+                Qt.AlignBottom)
+        self.layout.addWidget(self.DACText, 6, 0, 1, 2)
 
-        self.setLayout(layout)
+        self.setLayout(self.layout)
 
         # signals
         self.DACSlider.valueChanged.connect(self.changeValue)
@@ -157,7 +170,8 @@ class DACGroupBox(QGroupBox):
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
             self.DACText.setText("%6.4f" % self.value)
-        
+       
+
 class ADCGroupBox(QGroupBox):
     
     def __init__(self, parent=None, name="ADC #"):
