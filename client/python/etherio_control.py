@@ -7,30 +7,31 @@ import etherio
 class EtherIOController:
 
     def __init__(self):
-        self.rate = 100
+        rate = 100
 
-    def connect(self):
-        self.eio = etherio.EtherIO( '192.168.2.200' )
-        self.receiveThread = ThreadClass(self, self.eio)
-        self.daemon = True
-        self.receiveThread.start()
+    def connect():
+        eio = etherio.EtherIO( '192.168.2.200' )
+        receiveThread = ThreadClass(self, eio)
+        receiveThread.daemon = True
+        receiveThread.start()
+        eio.sendFrame()
 
-    def changeIP(self):
+    def changeIP():
         return
     
-    def changeSettings(self):
+    def changeSettings():
         return
 
-    def pullADC(self, adc):
+    def pullADC(adc):
         return
 
-    def pullDAC(self, dac):
+    def pullDAC(dac):
         return
 
-    def pullQuad(self, quad):
+    def pullQuad(quad):
         return
 
-    def pushDAC(self, dac):
+    def pushDAC(dac):
         return
 
 class ThreadClass(threading.Thread):
@@ -48,7 +49,7 @@ class ThreadClass(threading.Thread):
         while(True):            
             if self.keepGoing:
                 try:
-                    self.rcvcallfunction(TimeOut=0.5/self.Controller.rate)
+                    self.rcvcallfunction(TimeOut=0.5/rate)
                 except socket.timeout:
                     None
             else:
