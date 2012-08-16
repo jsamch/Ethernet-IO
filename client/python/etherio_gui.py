@@ -6,14 +6,19 @@ from PySide.QtCore import *
 from PySide.QtGui import *
 import unicodedata
 
+from etherio import EtherIO
+
+import time
+import socket
+from threading import Thread
+
 class EIOWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super(EIOWindow, self).__init__(parent)
         self.setWindowTitle("EtherIO")
 
-        centre = EIOCentralWidget()
-
+        centre = EIOCentralWidget() 
         self.setCentralWidget(centre)
 
 class EIOCentralWidget(QWidget):
@@ -36,7 +41,7 @@ class EIOCentralWidget(QWidget):
         
         self.quadFrame = QFrame() #QGroupBox("Quadratures")
         self.quadFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.quad = [QuadGroupBox("Quad %d" % i) for i in range(8)]
+        self.quad = [QuadGroupBox("Quad %d" % i) for i in range(10)]
 
         # layout of the widgets
         centralLayout = QVBoxLayout()
@@ -66,7 +71,26 @@ class EIOCentralWidget(QWidget):
         self.adcFrame.setLayout(adcLayout)
         self.quadFrame.setLayout(quadLayout)
 
+        # controller
+        self.controller = Controller()
+
         # signals
+        self.settings.connect.clicked.connect(self.connect)
+        
+    def connect(self):
+        self.eio = EtherIO(self.settings.ipInput.text())
+        self.eio.sendFrame()
+
+        self.controller.addQEObserver(self.updateQEs)
+
+        self.controller.connectToBoard(self.eio)
+
+    def updateADCs(self, newValues):
+        return
+
+    def updateQEs(self, newValues):
+        for i in range(len(self.quad)):
+            self.quad[i].updateValue(newValues[i].Position)
 
 class EIOSettings(QFrame):
 
@@ -109,6 +133,7 @@ class EIOSettings(QFrame):
         self.layout.setColumnStretch(3, 1)
 
         self.setLayout(self.layout)
+
 
 class DACGroupBox(QGroupBox):
 
@@ -206,13 +231,16 @@ class ADCGroupBox(QGroupBox):
 
         self.setLayout(layout)
 
+    def updateValue(self, newValue):
+        self.value = newValue
+
 class QuadGroupBox(QGroupBox):
 
     def __init__(self, parent=None, name="Quad #"):
         super(QuadGroupBox, self).__init__(parent)
 
         # Quad value
-        self.value = 0.0;
+        self.value = 0;
 
         # group box properties
         
@@ -228,6 +256,72 @@ class QuadGroupBox(QGroupBox):
 
         self.setLayout(layout)
 
+    def updateValue(self, newValue):
+        self.value = newValue
+        self.QuadText.setText("%s" % newValue)
+
+class Controller:
+    def __init__(self):
+        self.keepGoing = True # is this necessary?
+        self.pollRate = 30
+
+        # observers
+        self.QEObservers = []
+        self.ADCObservers = []
+
+        # etherIO object
+        self.eio = None
+    
+    def connectToBoard(self, etherio):
+        self.eio = etherio
+        self.socketThread = Thread(target=self.pollSocket,
+                args=(self.eio.RcvLoop,))
+        self.socketThread.daemon = True
+        self.dataThread = Thread(target=self.pollData, args=())
+        self.dataThread.daemon = True
+
+        self.socketThread.start()
+        self.dataThread.start()
+
+
+    def addQEObserver(self, observer):
+        self.QEObservers.append(observer)
+
+    def addADCObserver(self, observer):
+        self.ADCObservers.append(observer)
+
+    # do we need remove observer methods??
+
+    def pollSocket(self, rcvcallfunction):
+        print "Starting the receiving loop\n"
+        while(True):            
+            if self.keepGoing:
+                try:
+                    rcvcallfunction(TimeOut=0.5/self.pollRate)
+                except socket.timeout:
+                    None
+            else:
+                break
+          
+    def pollData(self):
+        print "Starting to check ADCs and QEs\n"
+        while(True):
+            if self.keepGoing:
+                if(self.eio):
+                    for observer in self.ADCObservers:
+                        observer(self.eio.ADCs)
+
+                    for observer in self.QEObservers:
+                        observer(self.eio.QEs)
+
+                    self.eio.sendFrame()
+                else:
+                    print "no EtherIO object\n"
+
+                time.sleep(1.0/self.pollRate)
+            else:
+                break
+
 if __name__ == '__main__':
     # create the app
     app = QApplication(sys.argv)
@@ -238,5 +332,4 @@ if __name__ == '__main__':
     main.raise_()
     # run the main loop
     sys.exit(app.exec_())
-
 
