@@ -153,6 +153,7 @@ class DACGroupBox(QGroupBox):
         self.DACMidLabel = QLabel("<font size=2>0.0</font>")
         self.DACMinLabel = QLabel("<font size=2>-10.0</font>")
         self.DACText = QLineEdit()
+        self.DACActual = QLineEdit()
         self.DACSelect = QCheckBox()
         self.DACSend = QPushButton("send")
 
@@ -185,7 +186,8 @@ class DACGroupBox(QGroupBox):
         self.layout.addWidget(self.DACMinLabel, 5, 0, Qt.AlignRight |
                 Qt.AlignBottom)
         self.layout.addWidget(self.DACText, 6, 0, 1, 2)
-        self.layout.addWidget(self.DACSend, 7, 0, 1, 2)
+        self.layout.addWidget(self.DACActual, 7, 0, 1, 2)
+        self.layout.addWidget(self.DACSend, 8, 0, 1, 2)
 
         self.setLayout(self.layout)
 
