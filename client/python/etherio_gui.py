@@ -118,6 +118,13 @@ class EIOSettings(QFrame):
 
         self.connect = QPushButton("connect")
 
+        # flashing connection status button
+        self.statusLabel = QLabel(self)
+        self.fill = QPixmap(20,20)
+        self.fill.fill(Qt.red)
+        self.statusLabel.setPixmap(self.fill)
+        
+
         # layout
         self.layout = QGridLayout()
         
@@ -129,8 +136,12 @@ class EIOSettings(QFrame):
         self.layout.addWidget(self.rangeLabel, 3, 0)
         self.layout.addWidget(self.rangeSelect, 3, 1)
         self.layout.addWidget(self.connect, 1, 2)
-        self.layout.addWidget(QFrame(self), 0, 3)
-        self.layout.setColumnStretch(3, 1)
+        self.layout.addWidget(self.statusLabel, 1, 3)
+        self.layout.addWidget(QFrame(self), 0, 4)
+
+        # stretch the specified column, rather than the other ones
+        # temp solution while other columns are not filled in yet
+        self.layout.setColumnStretch(4, 1)
 
         self.setLayout(self.layout)
 
