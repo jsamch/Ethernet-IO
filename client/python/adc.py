@@ -12,6 +12,6 @@ class ADC:
 
     # received in 32 bits, but only 24 bits are valid
     def updateVoltage(self, BitsReceived):
-        self.Voltage = 10.0/32768*BitsReceived.unpack('int:16')[0]
+        self.Voltage = 10.0/32768.0*BitsReceived.unpack('int:16')[0]
         #print "adc: ", BitsReceived, " ", self.Voltage
 
