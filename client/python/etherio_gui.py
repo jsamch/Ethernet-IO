@@ -26,6 +26,9 @@ class EIOCentralWidget(QWidget):
     def __init__(self, parent=None):
         super(EIOCentralWidget, self).__init__(parent)
 
+        # status
+        self.connected = False
+        
         # widgets which will be contained in the central widget
         self.settings = EIOSettings()
 
@@ -33,7 +36,7 @@ class EIOCentralWidget(QWidget):
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
         self.dacSendAll = QPushButton("send ALL")
-        self.dacSendSelected = QPushButton("send SELECTED")
+        self.dacSendSelected = QPushButton("send UN-SELECTED")
 
         self.adcFrame = QFrame() #QGroupBox("ADCs")
         self.adcFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
@@ -76,17 +79,24 @@ class EIOCentralWidget(QWidget):
 
         # signals
         self.settings.connect.clicked.connect(self.connect)
+        self.controller.addQEObserver(self.updateQEs)
         
     def connect(self):
-        self.eio = EtherIO(self.settings.ipInput.text())
-        self.eio.sendFrame()
-
-        self.controller.addQEObserver(self.updateQEs)
-
-        self.controller.connectToBoard(self.eio)
+        if self.connected == False :
+            self.eio = EtherIO(self.settings.ipInput.text())
+            self.eio.sendFrame()
+            self.controller.connectToBoard(self.eio)
+            self.settings.connect.setText("disconnect")
+            self.connected = True
+        else:
+            self.controller.disconnect()
+            self.eio = None
+            self.settings.connect.setText("connect")
+            self.connected = False
 
     def updateADCs(self, newValues):
-        return
+        for i in range(len(self.adc)):
+            self.adc[i].updateValue(newValues[i].Voltage)
 
     def updateQEs(self, newValues):
         for i in range(len(self.quad)):
@@ -120,9 +130,11 @@ class EIOSettings(QFrame):
 
         # flashing connection status button
         self.statusLabel = QLabel(self)
-        self.fill = QPixmap(20,20)
-        self.fill.fill(Qt.red)
-        self.statusLabel.setPixmap(self.fill)
+        self.redFill = QPixmap(20,20)
+        self.redFill.fill(Qt.red)
+        self.greenFill = QPixmap(20,20)
+        self.greenFill.fill(Qt.green)
+        self.statusLabel.setPixmap(self.redFill)
         
 
         # layout
@@ -166,6 +178,7 @@ class DACGroupBox(QGroupBox):
         self.DACText = QLineEdit()
         self.DACActual = QLineEdit()
         self.DACSelect = QCheckBox()
+        self.DACSelectLabel = QLabel("<font size=2>auto send")
         self.DACSend = QPushButton("send")
 
         # slider settings
@@ -187,8 +200,11 @@ class DACGroupBox(QGroupBox):
 
         self.DACText.setText("%6.4f" % self.value)
 
+        self.DACActual.setDisabled(True)
+
         # layout
         self.layout = QGridLayout()
+        self.layout.addWidget(self.DACSelectLabel, 0, 0, 1, 0)
         self.layout.addWidget(self.DACSelect, 0, 0, 1, 2, Qt.AlignRight)
         self.layout.addWidget(self.DACSlider, 1, 1, 5, 1, Qt.AlignLeft)
         self.layout.addWidget(self.DACMaxLabel, 1, 0, Qt.AlignRight |
@@ -281,6 +297,7 @@ class Controller:
         # observers
         self.QEObservers = []
         self.ADCObservers = []
+        self.TimeOutObservers = []
 
         # etherIO object
         self.eio = None
@@ -292,16 +309,24 @@ class Controller:
         self.socketThread.daemon = True
         self.dataThread = Thread(target=self.pollData, args=())
         self.dataThread.daemon = True
-
+        self.keepGoing = True
         self.socketThread.start()
         self.dataThread.start()
 
+    def disconnect(self):
+        self.keepGoing = False
+        while(self.socketThread.isAlive() and self.dataThread.isAlive()):
+                None
+        self.eio = None
 
     def addQEObserver(self, observer):
         self.QEObservers.append(observer)
 
     def addADCObserver(self, observer):
         self.ADCObservers.append(observer)
+
+    def addTimeOutObserver(self, observer):
+        self.TimeOutObservers.append(observer)
 
     # do we need remove observer methods??
 
