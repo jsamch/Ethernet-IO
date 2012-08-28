@@ -80,18 +80,33 @@ class EIOCentralWidget(QWidget):
         # signals
         self.settings.connect.clicked.connect(self.connect)
         self.controller.addQEObserver(self.updateQEs)
-        
+        self.controller.addADCObserver(self.updateADCs)
+        self.controller.addDACObserver(self.updateDACs)
+        self.controller.addTimeOutObserver(self.timeout)
+
     def connect(self):
         if self.connected == False :
             self.eio = EtherIO(self.settings.ipInput.text())
+            #for i in range(len(self.dac)):
+            #    self.eio.DACs[i].voltage = 0.0
+            #self.eio.updateDACConfig()
+            # sleep while accepting config
+            #time.sleep(1)
             self.eio.sendFrame()
             self.controller.connectToBoard(self.eio)
             self.settings.connect.setText("disconnect")
+            self.settings.ipInput.setDisabled(True)
+            self.settings.udpInput.setDisabled(True)
+            self.settings.rangeSelect.setDisabled(True)
             self.connected = True
         else:
             self.controller.disconnect()
             self.eio = None
             self.settings.connect.setText("connect")
+            self.settings.ipInput.setEnabled(True)
+            self.settings.ipInput.setFocus()
+            self.settings.udpInput.setEnabled(True)
+            self.settings.rangeSelect.setEnabled(True)
             self.connected = False
 
     def updateADCs(self, newValues):
@@ -101,6 +116,21 @@ class EIOCentralWidget(QWidget):
     def updateQEs(self, newValues):
         for i in range(len(self.quad)):
             self.quad[i].updateValue(newValues[i].Position)
+
+    def updateDACs(self, currentValues):
+        for i in range(len(self.dac)):
+            self.dac[i].DACActual.setText("%6.4f" % currentValues[i].voltage)
+            
+            # check if we need to send a new value
+            if self.dac[i].DACSelect.isChecked():
+                self.eio.DACs[i].voltage = float(self.dac[i].value)
+
+    # TODO: change to using QThreads and signals to accomplish this
+    def timeout(self, timedout):
+        if timedout :
+            None
+        else:
+            None
 
 class EIOSettings(QFrame):
 
@@ -127,6 +157,7 @@ class EIOSettings(QFrame):
         "0 to 10.8", "0 to 10", "0 to 5"])
 
         self.connect = QPushButton("connect")
+        self.connect.setMinimumWidth(150)
 
         # flashing connection status button
         self.statusLabel = QLabel(self)
@@ -262,6 +293,8 @@ class ADCGroupBox(QGroupBox):
 
     def updateValue(self, newValue):
         self.value = newValue
+        if self.value:
+            self.ADCText.setText("%6.4f" % self.value)
 
 class QuadGroupBox(QGroupBox):
 
@@ -292,9 +325,10 @@ class QuadGroupBox(QGroupBox):
 class Controller:
     def __init__(self):
         self.keepGoing = True # is this necessary?
-        self.pollRate = 30
+        self.pollRate = 5
 
         # observers
+        self.DACObservers = []
         self.QEObservers = []
         self.ADCObservers = []
         self.TimeOutObservers = []
@@ -315,9 +349,14 @@ class Controller:
 
     def disconnect(self):
         self.keepGoing = False
+
+        # wait for the threads to die
         while(self.socketThread.isAlive() and self.dataThread.isAlive()):
                 None
         self.eio = None
+
+    def addDACObserver(self, observer):
+        self.DACObservers.append(observer)
 
     def addQEObserver(self, observer):
         self.QEObservers.append(observer)
@@ -325,6 +364,7 @@ class Controller:
     def addADCObserver(self, observer):
         self.ADCObservers.append(observer)
 
+    # returns True if timout occurs, False otherwise
     def addTimeOutObserver(self, observer):
         self.TimeOutObservers.append(observer)
 
@@ -336,8 +376,11 @@ class Controller:
             if self.keepGoing:
                 try:
                     rcvcallfunction(TimeOut=0.5/self.pollRate)
+                    for observer in self.TimeOutObservers:
+                        observer(False)
                 except socket.timeout:
-                    None
+                    for observer in self.TimeOutObservers:
+                        observer(True)
             else:
                 break
           
@@ -351,6 +394,9 @@ class Controller:
 
                     for observer in self.QEObservers:
                         observer(self.eio.QEs)
+                    
+                    for observer in self.DACObservers:
+                        observer(self.eio.DACs)
 
                     self.eio.sendFrame()
                 else:
