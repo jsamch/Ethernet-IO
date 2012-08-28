@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+from PySide import QtCore
 from PySide.QtCore import *
 from PySide.QtGui import *
 import unicodedata
@@ -11,6 +12,8 @@ from etherio import EtherIO
 import time
 import socket
 from threading import Thread
+
+@QtCore.Slot(bool)
 
 class EIOWindow(QMainWindow):
 
@@ -82,7 +85,7 @@ class EIOCentralWidget(QWidget):
         self.controller.addQEObserver(self.updateQEs)
         self.controller.addADCObserver(self.updateADCs)
         self.controller.addDACObserver(self.updateDACs)
-        self.controller.addTimeOutObserver(self.timeout)
+        self.controller.timeout.connect(self.timeout)
 
     def connect(self):
         if self.connected == False :
@@ -128,9 +131,9 @@ class EIOCentralWidget(QWidget):
     # TODO: change to using QThreads and signals to accomplish this
     def timeout(self, timedout):
         if timedout :
-            None
+            self.settings.statusLabel.setPixmap(self.settings.redFill)
         else:
-            None
+            self.settings.statusLabel.setPixmap(self.settings.greenFill)
 
 class EIOSettings(QFrame):
 
@@ -322,10 +325,16 @@ class QuadGroupBox(QGroupBox):
         self.value = newValue
         self.QuadText.setText("%s" % newValue)
 
-class Controller:
-    def __init__(self):
+class Controller(QtCore.QObject):
+    
+    # define slots
+    timeout = QtCore.Signal(bool)
+
+    def __init__(self, parent=None):
+        super(Controller, self).__init__(parent)
+
         self.keepGoing = True # is this necessary?
-        self.pollRate = 5
+        self.pollRate = 15 
 
         # observers
         self.DACObservers = []
@@ -375,12 +384,10 @@ class Controller:
         while(True):            
             if self.keepGoing:
                 try:
-                    rcvcallfunction(TimeOut=0.5/self.pollRate)
-                    for observer in self.TimeOutObservers:
-                        observer(False)
+                    rcvcallfunction(TimeOut=1.0/self.pollRate)
+                    self.timeout.emit(False)
                 except socket.timeout:
-                    for observer in self.TimeOutObservers:
-                        observer(True)
+                    self.timeout.emit(True)
             else:
                 break
           
