@@ -13,7 +13,10 @@ import time
 import socket
 from threading import Thread
 
+# slot definitions
 @QtCore.Slot(bool)
+@QtCore.Slot(int)
+@QtCore.Slot(float)
 
 class EIOWindow(QMainWindow):
 
@@ -37,17 +40,17 @@ class EIOCentralWidget(QWidget):
 
         self.dacFrame = QFrame() #QGroupBox("DACs")
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
+        self.dac = [DACGroupBox(i, 0.0) for i in range(8)]
         self.dacSendAll = QPushButton("send ALL")
         self.dacSendSelected = QPushButton("send UN-SELECTED")
 
         self.adcFrame = QFrame() #QGroupBox("ADCs")
         self.adcFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.adc = [ADCGroupBox("ADC %d" % i) for i in range(8)]
+        self.adc = [ADCGroupBox(i) for i in range(8)]
         
         self.quadFrame = QFrame() #QGroupBox("Quadratures")
         self.quadFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.quad = [QuadGroupBox("Quad %d" % i) for i in range(10)]
+        self.quad = [QuadGroupBox(i) for i in range(10)]
 
         # layout of the widgets
         centralLayout = QVBoxLayout()
@@ -86,6 +89,8 @@ class EIOCentralWidget(QWidget):
         self.controller.addADCObserver(self.updateADCs)
         self.controller.addDACObserver(self.updateDACs)
         self.controller.timeout.connect(self.timeout)
+        for i in range(len(self.dac)):
+            self.dac[i].send.connect(self.send)
 
     def connect(self):
         if self.connected == False :
@@ -109,6 +114,9 @@ class EIOCentralWidget(QWidget):
             self.settings.rangeSelect.setEnabled(True)
             self.connected = False
 
+    def send(self, dac, value):
+        self.eio.DACs[dac].voltage = value
+    
     def updateADCs(self, newValues):
         for i in range(len(self.adc)):
             self.adc[i].updateValue(newValues[i].Voltage)
@@ -125,7 +133,6 @@ class EIOCentralWidget(QWidget):
             if self.dac[i].DACSelect.isChecked():
                 self.eio.DACs[i].voltage = float(self.dac[i].value)
 
-    # TODO: change to using QThreads and signals to accomplish this
     def timeout(self, timedout):
         if timedout :
             self.settings.statusLabel.setPixmap(self.settings.redFill)
@@ -191,16 +198,20 @@ class EIOSettings(QFrame):
 
 class DACGroupBox(QGroupBox):
 
-    def __init__(self, parent=None, name="DAC #", value=0.0):
-        super(DACGroupBox, self).__init__(parent)
+    # signal definition
+    send = QtCore.Signal((int, float))
 
-        # DAC value
+    def __init__(self, number, value=0.0):
+        # attributes 
         self.value = value
+        self.number = number
+        self.name = "DAC %d" % number 
         
-        # group box properties
-        #self.setCheckable(True)
-        #self.setDisabled(True)
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(DACGroupBox, self).__init__(parent)
 
+        
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
         self.DACMaxLabel = QLabel("<font size=2>10.0</font>")
@@ -247,6 +258,7 @@ class DACGroupBox(QGroupBox):
         # signals
         self.DACSlider.valueChanged.connect(self.changeValue)
         self.DACText.returnPressed.connect(self.changeValue)
+        self.DACSend.clicked.connect(self.sendValue)
 
     def changeValue(self, newValue=None):
         if self.sender() == self.DACSlider:
@@ -256,18 +268,22 @@ class DACGroupBox(QGroupBox):
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
             self.DACText.setText("%0.3f" % self.value)
-       
+    
+    def sendValue(self):
+       self.send.emit(self.number, self.value)
 
 class ADCGroupBox(QGroupBox):
     
-    def __init__(self, parent=None, name="ADC #"):
-        super(ADCGroupBox, self).__init__(parent)
+    def __init__(self, number):
+        # attributes 
+        self.value = 0.0
+        self.number = number
+        self.name = "ADC %d" % self.number
 
-        # ADC value
-        self.value = 0.0;
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(ADCGroupBox, self).__init__(parent)
 
-        # group box properties
-        
         # widgets
         self.ADCText = QLineEdit()
 
@@ -292,13 +308,15 @@ class ADCGroupBox(QGroupBox):
 
 class QuadGroupBox(QGroupBox):
 
-    def __init__(self, parent=None, name="Quad #"):
-        super(QuadGroupBox, self).__init__(parent)
+    def __init__(self, number):
+        # attributes 
+        self.value = 0
+        self.number = number
+        self.name = "Quad %d" % self.number
 
-        # Quad value
-        self.value = 0;
-
-        # group box properties
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(QuadGroupBox, self).__init__(parent)
         
         # widgets
         self.QuadText = QLineEdit()
