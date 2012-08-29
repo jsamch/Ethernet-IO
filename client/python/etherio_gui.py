@@ -90,12 +90,9 @@ class EIOCentralWidget(QWidget):
     def connect(self):
         if self.connected == False :
             self.eio = EtherIO(self.settings.ipInput.text())
-            #for i in range(len(self.dac)):
-            #    self.eio.DACs[i].voltage = 0.0
-            #self.eio.updateDACConfig()
+            self.eio.updateDACConfig()
             # sleep while accepting config
-            #time.sleep(1)
-            self.eio.sendFrame()
+            time.sleep(0.1)
             self.controller.connectToBoard(self.eio)
             self.settings.connect.setText("disconnect")
             self.settings.ipInput.setDisabled(True)
@@ -122,7 +119,7 @@ class EIOCentralWidget(QWidget):
 
     def updateDACs(self, currentValues):
         for i in range(len(self.dac)):
-            self.dac[i].DACActual.setText("%6.4f" % currentValues[i].voltage)
+            self.dac[i].DACActual.setText("%0.3f" % currentValues[i].voltage)
             
             # check if we need to send a new value
             if self.dac[i].DACSelect.isChecked():
@@ -222,18 +219,13 @@ class DACGroupBox(QGroupBox):
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
         
-        # line settings
+        # text settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
-
-        # label settings
-
-        # input validator
         self.DACText.setValidator(self.validator)
-        #self.DACText.setInputMask("#00.0000")
-
-        self.DACText.setText("%6.4f" % self.value)
-
+        self.DACText.setAlignment(Qt.AlignRight)
+        self.DACActual.setAlignment(Qt.AlignRight)
+        self.DACText.setText("%0.3f" % self.value)
         self.DACActual.setDisabled(True)
 
         # layout
@@ -259,11 +251,11 @@ class DACGroupBox(QGroupBox):
     def changeValue(self, newValue=None):
         if self.sender() == self.DACSlider:
             self.value = self.DACSlider.value()/2.0
-            self.DACText.setText("%6.4f" % self.value)
+            self.DACText.setText("%0.3f" % self.value)
         elif self.sender() == self.DACText:
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
-            self.DACText.setText("%6.4f" % self.value)
+            self.DACText.setText("%0.3f" % self.value)
        
 
 class ADCGroupBox(QGroupBox):
@@ -279,14 +271,13 @@ class ADCGroupBox(QGroupBox):
         # widgets
         self.ADCText = QLineEdit()
 
-        # line settings
-        self.ADCText.setReadOnly(True)
-        
+        # text settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
         self.ADCText.setValidator(self.validator)
-
-        self.ADCText.setPlaceholderText("%6.4f" % self.value)
+        self.ADCText.setAlignment(Qt.AlignRight)
+        self.ADCText.setReadOnly(True)
+        self.ADCText.setPlaceholderText("%0.3f" % self.value)
 
         # layout
         layout = QGridLayout()
@@ -297,7 +288,7 @@ class ADCGroupBox(QGroupBox):
     def updateValue(self, newValue):
         self.value = newValue
         if self.value:
-            self.ADCText.setText("%6.4f" % self.value)
+            self.ADCText.setText("%0.3f" % self.value)
 
 class QuadGroupBox(QGroupBox):
 
@@ -312,8 +303,9 @@ class QuadGroupBox(QGroupBox):
         # widgets
         self.QuadText = QLineEdit()
 
-        # line settings
+        # text settings
         self.QuadText.setReadOnly(True)
+        self.QuadText.setAlignment(Qt.AlignRight)
 
         # layout
         layout = QGridLayout()
@@ -385,8 +377,10 @@ class Controller(QtCore.QObject):
             if self.keepGoing:
                 try:
                     rcvcallfunction(TimeOut=1.0/self.pollRate)
+                    # timout did not occur
                     self.timeout.emit(False)
                 except socket.timeout:
+                    # timout occured
                     self.timeout.emit(True)
             else:
                 break
