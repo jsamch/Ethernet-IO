@@ -100,6 +100,10 @@ class EIOCentralWidget(QWidget):
         self.controller.timeout.connect(self.timeout)
         for i in range(len(self.dac)):
             self.dac[i].send.connect(self.send)
+        self.dacSendAll.clicked.connect(self.sendAll)
+        self.dacResetAll.clicked.connect(self.resetAll)
+        self.dacSelectAll.clicked.connect(self.selectAll)
+        self.dacUnSelectAll.clicked.connect(self.unSelectAll)
 
     def connect(self):
         if self.connected == False :
@@ -126,6 +130,25 @@ class EIOCentralWidget(QWidget):
     def send(self, dac, value):
         self.eio.DACs[dac].voltage = value
     
+    def sendAll(self):
+        for i in range(len(self.dac)):
+            self.eio.DACs[i].voltage = self.dac[i].value
+
+    def resetAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACText.setText("%0.3f" % 0.0)
+            self.dac[i].DACText.returnPressed.emit()
+            if self.connected:
+                self.eio.DACs[i].Voltage = self.dac[i].value
+
+    def selectAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACSelect.setChecked(True)
+
+    def unSelectAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACSelect.setChecked(False)
+
     def updateADCs(self, newValues):
         for i in range(len(self.adc)):
             self.adc[i].updateValue(newValues[i].Voltage)
@@ -238,6 +261,7 @@ class DACGroupBox(QGroupBox):
         self.DACSlider.setTickInterval(10)
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
+        self.DACSlider.setValue(self.value*2.0)
         
         # text settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
@@ -261,7 +285,6 @@ class DACGroupBox(QGroupBox):
         self.layout.addWidget(self.DACText, 6, 0, 1, 2)
         self.layout.addWidget(self.DACActual, 7, 0, 1, 2)
         self.layout.addWidget(self.DACSend, 8, 0, 1, 2)
-
         self.setLayout(self.layout)
 
         # signals
@@ -277,6 +300,11 @@ class DACGroupBox(QGroupBox):
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
             self.DACText.setText("%0.3f" % self.value)
+        else:
+            # change from the outside
+            self.value = newValue
+            self.DACText.setText("0.3f" % self.value)
+            self.DACSlider.setValue(self.value*2.0)
     
     def sendValue(self):
        self.send.emit(self.number, self.value)
