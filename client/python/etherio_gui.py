@@ -38,16 +38,24 @@ class EIOCentralWidget(QWidget):
         # widgets which will be contained in the central widget
         self.settings = EIOSettings()
 
+        # DACs
         self.dacFrame = QFrame() #QGroupBox("DACs")
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.dac = [DACGroupBox(i, 0.0) for i in range(8)]
+        self.dacButtonFrame = QWidget()
+        #self.dacButtonFrame.setLineWidth(0)
+        #self.dacButtonFrame.setMidLineWidth(0)
         self.dacSendAll = QPushButton("send ALL")
-        self.dacSendSelected = QPushButton("send UN-SELECTED")
+        self.dacResetAll = QPushButton("set ALL to 0.0V")
+        self.dacSelectAll = QPushButton("auto send ALL")
+        self.dacUnSelectAll = QPushButton("auto send NONE")
 
+        # ADCs
         self.adcFrame = QFrame() #QGroupBox("ADCs")
         self.adcFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.adc = [ADCGroupBox(i) for i in range(8)]
         
+        # Quads
         self.quadFrame = QFrame() #QGroupBox("Quadratures")
         self.quadFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.quad = [QuadGroupBox(i) for i in range(10)]
@@ -55,28 +63,29 @@ class EIOCentralWidget(QWidget):
         # layout of the widgets
         centralLayout = QVBoxLayout()
         centralLayout.setSpacing(0) #spacing between the frames below
-
         centralLayout.addWidget(self.settings)
         centralLayout.addWidget(self.dacFrame, 1)
         centralLayout.addWidget(self.adcFrame)
         centralLayout.addWidget(self.quadFrame)
-        
         dacLayout = QGridLayout()
         for i in range(len(self.dac)):
             dacLayout.addWidget(self.dac[i], 0, i)
-        dacLayout.addWidget(self.dacSendAll, 1, 0, 1, 4 )
-        dacLayout.addWidget(self.dacSendSelected, 1, 4, 1, 4 )
-
+        dacLayout.addWidget(self.dacButtonFrame, 2, 0, 1, len(self.dac))
+        dacButtonLayout = QGridLayout()
+        dacButtonLayout.setContentsMargins(0,0,0,0)
+        dacButtonLayout.addWidget(self.dacSendAll, 0, 0)
+        dacButtonLayout.addWidget(self.dacResetAll, 0, 1)
+        dacButtonLayout.addWidget(self.dacSelectAll, 0, 2)
+        dacButtonLayout.addWidget(self.dacUnSelectAll, 0, 3)
         adcLayout = QGridLayout()
         for i in range(len(self.adc)):
             adcLayout.addWidget(self.adc[i], 0, i)
-
         quadLayout = QGridLayout()
         for i in range(len(self.quad)):
             quadLayout.addWidget(self.quad[i], 0, i)
-        
         self.setLayout(centralLayout)
         self.dacFrame.setLayout(dacLayout)
+        self.dacButtonFrame.setLayout(dacButtonLayout)
         self.adcFrame.setLayout(adcLayout)
         self.quadFrame.setLayout(quadLayout)
 
