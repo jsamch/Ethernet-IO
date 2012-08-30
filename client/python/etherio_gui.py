@@ -46,6 +46,8 @@ class EIOCentralWidget(QWidget):
         #self.dacButtonFrame.setLineWidth(0)
         #self.dacButtonFrame.setMidLineWidth(0)
         self.dacSendAll = QPushButton("send ALL")
+        # initially disabled
+        self.dacSendAll.setDisabled(True)
         self.dacResetAll = QPushButton("set ALL to 0.0V")
         self.dacSelectAll = QPushButton("auto send ALL")
         self.dacUnSelectAll = QPushButton("auto send NONE")
@@ -117,6 +119,9 @@ class EIOCentralWidget(QWidget):
             self.settings.udpInput.setDisabled(True)
             self.settings.rangeSelect.setDisabled(True)
             self.connected = True
+            for i in range(len(self.dac)):
+                self.dac[i].DACSend.setEnabled(True)
+            self.dacSendAll.setEnabled(True)
         else:
             self.controller.disconnect()
             self.eio = None
@@ -126,6 +131,9 @@ class EIOCentralWidget(QWidget):
             self.settings.udpInput.setEnabled(True)
             self.settings.rangeSelect.setEnabled(True)
             self.connected = False
+            for i in range(len(self.dac)):
+                self.dac[i].DACSend.setDisabled(True)
+            self.dacSendAll.setDisabled(True)
 
     def send(self, dac, value):
         self.eio.DACs[dac].voltage = value
@@ -242,7 +250,6 @@ class DACGroupBox(QGroupBox):
         # parent constructor
         QGroupBox.__init__(self, self.name)
         #super(DACGroupBox, self).__init__(parent)
-
         
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
@@ -254,6 +261,8 @@ class DACGroupBox(QGroupBox):
         self.DACSelect = QCheckBox()
         self.DACSelectLabel = QLabel("<font size=2>auto send")
         self.DACSend = QPushButton("send")
+        # initially disable the send buttons
+        self.DACSend.setDisabled(True)
 
         # slider settings
         self.DACSlider.setMinimum(-20)
@@ -271,7 +280,6 @@ class DACGroupBox(QGroupBox):
         self.DACActual.setAlignment(Qt.AlignRight)
         self.DACText.setText("%0.3f" % self.value)
         self.DACActual.setDisabled(True)
-
         # layout
         self.layout = QGridLayout()
         self.layout.addWidget(self.DACSelectLabel, 0, 0, 1, 0)
