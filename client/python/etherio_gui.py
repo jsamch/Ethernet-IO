@@ -357,6 +357,7 @@ class DACGroupBox(QGroupBox):
         self.DACMinLabel = QLabel("<font size=2>-10.0</font>")
         self.DACText = QLineEdit()
         self.DACActual = QLineEdit()
+        self.DACActual.setPlaceholderText("%0.3f"%0.0)
         self.DACSelect = QCheckBox()
         self.DACSelectLabel = QLabel("<font size=2>auto send")
         self.DACSend = QPushButton("send")
@@ -464,6 +465,7 @@ class QuadGroupBox(QGroupBox):
         
         # widgets
         self.QuadText = QLineEdit()
+        self.QuadText.setPlaceholderText("%d"%0)
 
         # text settings
         self.QuadText.setReadOnly(True)
