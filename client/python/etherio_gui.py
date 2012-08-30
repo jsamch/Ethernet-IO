@@ -107,7 +107,17 @@ class EIOCentralWidget(QWidget):
         self.settings.dacInput.returnPressed.connect(self.changeDACNumber)
         self.settings.adcInput.returnPressed.connect(self.changeADCNumber)
         self.settings.quadInput.returnPressed.connect(self.changeQuadNumber)
+        self.settings.rateInput.returnPressed.connect(self.changePollRate)
 
+    def changePollRate(self):
+        newRate = float(self.settings.rateInput.text())
+        oldRate = self.controller.pollRate
+        if newRate < 0.0 or newRate > 30.0:
+            # make sure it is within the range
+            self.settings.rateInput.setText("%f"%oldRate)
+        else:
+            self.controller.pollRate = newRate
+    
     def changeDACNumber(self):
         newNumber = int(self.settings.dacInput.text())
         currentNumber = len(self.dac)
@@ -277,10 +287,10 @@ class EIOSettings(QFrame):
         self.adcInput.setMaximumWidth(30)
         self.adcInput.setAlignment(Qt.AlignRight)
         self.quadLabel = QLabel("Quad #:")
-        self.quadInput = QLineEdit("11")
+        self.quadInput = QLineEdit("10")
         self.quadInput.setMaximumWidth(30)
         self.quadInput.setAlignment(Qt.AlignRight)
-        self.rateLabel = QLabel("Rate (Hz):")
+        self.rateLabel = QLabel("Poll Rate (Hz):")
         self.rateInput = QLineEdit("20")
         self.rateInput.setAlignment(Qt.AlignRight)
         self.rateInput.setMaximumWidth(40)
@@ -478,7 +488,7 @@ class Controller(QtCore.QObject):
         super(Controller, self).__init__(parent)
 
         self.keepGoing = True # is this necessary?
-        self.pollRate = 15 
+        self.pollRate = 20 
 
         # observers
         self.DACObservers = []
