@@ -43,8 +43,6 @@ class EIOCentralWidget(QWidget):
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.dac = [DACGroupBox(i, 0.0) for i in range(8)]
         self.dacButtonFrame = QWidget()
-        #self.dacButtonFrame.setLineWidth(0)
-        #self.dacButtonFrame.setMidLineWidth(0)
         self.dacSendAll = QPushButton("send ALL")
         # initially disabled
         self.dacSendAll.setDisabled(True)
@@ -69,27 +67,27 @@ class EIOCentralWidget(QWidget):
         centralLayout.addWidget(self.dacFrame, 1)
         centralLayout.addWidget(self.adcFrame)
         centralLayout.addWidget(self.quadFrame)
-        dacLayout = QGridLayout()
+        self.dacLayout = QGridLayout()
         for i in range(len(self.dac)):
-            dacLayout.addWidget(self.dac[i], 0, i)
-        dacLayout.addWidget(self.dacButtonFrame, 2, 0, 1, len(self.dac))
+            self.dacLayout.addWidget(self.dac[i], 0, i)
+        self.dacLayout.addWidget(self.dacButtonFrame, 2, 0, 1, len(self.dac))
         dacButtonLayout = QGridLayout()
         dacButtonLayout.setContentsMargins(0,0,0,0)
         dacButtonLayout.addWidget(self.dacSendAll, 0, 0)
         dacButtonLayout.addWidget(self.dacResetAll, 0, 1)
         dacButtonLayout.addWidget(self.dacSelectAll, 0, 2)
         dacButtonLayout.addWidget(self.dacUnSelectAll, 0, 3)
-        adcLayout = QGridLayout()
+        self.adcLayout = QGridLayout()
         for i in range(len(self.adc)):
-            adcLayout.addWidget(self.adc[i], 0, i)
-        quadLayout = QGridLayout()
+            self.adcLayout.addWidget(self.adc[i], 0, i)
+        self.quadLayout = QGridLayout()
         for i in range(len(self.quad)):
-            quadLayout.addWidget(self.quad[i], 0, i)
+            self.quadLayout.addWidget(self.quad[i], 0, i)
         self.setLayout(centralLayout)
-        self.dacFrame.setLayout(dacLayout)
+        self.dacFrame.setLayout(self.dacLayout)
         self.dacButtonFrame.setLayout(dacButtonLayout)
-        self.adcFrame.setLayout(adcLayout)
-        self.quadFrame.setLayout(quadLayout)
+        self.adcFrame.setLayout(self.adcLayout)
+        self.quadFrame.setLayout(self.quadLayout)
 
         # controller
         self.controller = Controller()
@@ -106,6 +104,69 @@ class EIOCentralWidget(QWidget):
         self.dacResetAll.clicked.connect(self.resetAll)
         self.dacSelectAll.clicked.connect(self.selectAll)
         self.dacUnSelectAll.clicked.connect(self.unSelectAll)
+        self.settings.dacInput.returnPressed.connect(self.changeDACNumber)
+        self.settings.adcInput.returnPressed.connect(self.changeADCNumber)
+        self.settings.quadInput.returnPressed.connect(self.changeQuadNumber)
+
+    def changeDACNumber(self):
+        newNumber = int(self.settings.dacInput.text())
+        currentNumber = len(self.dac)
+        if newNumber > 8 or newNumber < 1 :
+            # make sure its in range, 8 is max for now due to etherio
+            # limitation
+            self.settings.dacInput.setText("%d"%currentNumber)
+        elif newNumber > currentNumber:
+            # add dacs
+            for i in range(currentNumber, newNumber, 1):
+                newDAC = DACGroupBox(i, 0.0)
+                self.dac.append((newDAC))
+                self.dacLayout.addWidget(newDAC, 0, i)
+        elif newNumber < currentNumber:
+            # subtract dacs
+            for i in range(currentNumber, newNumber, -1):
+                oldDAC = self.dacLayout.itemAtPosition(0, i-1)
+                self.dac.pop()
+                oldDAC.widget().deleteLater()
+
+    def changeADCNumber(self):
+        newNumber = int(self.settings.adcInput.text())
+        currentNumber = len(self.adc)
+        if newNumber > 8 or newNumber < 1 :
+            # make sure its in range, 8 is max for now due to etherio
+            # limitation
+            self.settings.adcInput.setText("%d"%currentNumber)
+        elif newNumber > currentNumber:
+            # add adcs
+            for i in range(currentNumber, newNumber, 1):
+                newADC = ADCGroupBox(i)
+                self.adc.append((newADC))
+                self.adcLayout.addWidget(newADC, 0, i)
+        elif newNumber < currentNumber:
+            # subtract adcs
+            for i in range(currentNumber, newNumber, -1):
+                oldADC = self.adcLayout.itemAtPosition(0, i-1)
+                self.adc.pop()
+                oldADC.widget().deleteLater()
+
+    def changeQuadNumber(self):
+        newNumber = int(self.settings.quadInput.text())
+        currentNumber = len(self.quad)
+        if newNumber > 10 or newNumber < 1 :
+            # make sure its in range, 10 is max for now due to etherio
+            # limitation
+            self.settings.quadInput.setText("%d"%currentNumber)
+        elif newNumber > currentNumber:
+            # add quads
+            for i in range(currentNumber, newNumber, 1):
+                newQuad = QuadGroupBox(i)
+                self.quad.append((newQuad))
+                self.quadLayout.addWidget(newQuad, 0, i)
+        elif newNumber < currentNumber:
+            # subtract quads
+            for i in range(currentNumber, newNumber, -1):
+                oldQuad = self.quadLayout.itemAtPosition(0, i-1)
+                self.quad.pop()
+                oldQuad.widget().deleteLater()
 
     def connect(self):
         if self.connected == False :
@@ -122,6 +183,9 @@ class EIOCentralWidget(QWidget):
             for i in range(len(self.dac)):
                 self.dac[i].DACSend.setEnabled(True)
             self.dacSendAll.setEnabled(True)
+            self.settings.dacInput.setDisabled(True)
+            self.settings.adcInput.setDisabled(True)
+            self.settings.quadInput.setDisabled(True)
         else:
             self.controller.disconnect()
             self.eio = None
@@ -134,6 +198,9 @@ class EIOCentralWidget(QWidget):
             for i in range(len(self.dac)):
                 self.dac[i].DACSend.setDisabled(True)
             self.dacSendAll.setDisabled(True)
+            self.settings.dacInput.setEnabled(True)
+            self.settings.adcInput.setEnabled(True)
+            self.settings.quadInput.setEnabled(True)
 
     def send(self, dac, value):
         self.eio.DACs[dac].voltage = value
@@ -191,18 +258,33 @@ class EIOSettings(QFrame):
         
         # widgets
         self.label = QLabel("Settings")
-        
         self.ipLabel = QLabel("IP: ")
         self.ipInput = QLineEdit("192.168.2.200")
-
+        self.ipInput.setAlignment(Qt.AlignRight)
         self.udpLabel = QLabel("UDP port: ")
         self.udpInput = QLineEdit("1234")
-
+        self.udpInput.setAlignment(Qt.AlignRight)
         self.rangeLabel = QLabel("DAC range: ")
         self.rangeSelect = QComboBox()
         self.rangeSelect.addItems(["-10 to 10", "-10.8 to 10.8", "-5 to 5",
         "0 to 10.8", "0 to 10", "0 to 5"])
-
+        self.dacLabel = QLabel("DAC #:")
+        self.dacInput = QLineEdit("8")
+        self.dacInput.setMaximumWidth(30)
+        self.dacInput.setAlignment(Qt.AlignRight)
+        self.adcLabel = QLabel("ADC #:")
+        self.adcInput = QLineEdit("8")
+        self.adcInput.setMaximumWidth(30)
+        self.adcInput.setAlignment(Qt.AlignRight)
+        self.quadLabel = QLabel("Quad #:")
+        self.quadInput = QLineEdit("11")
+        self.quadInput.setMaximumWidth(30)
+        self.quadInput.setAlignment(Qt.AlignRight)
+        self.rateLabel = QLabel("Rate (Hz):")
+        self.rateInput = QLineEdit("20")
+        self.rateInput.setAlignment(Qt.AlignRight)
+        self.rateInput.setMaximumWidth(40)
+        self.reset = QPushButton("reset to default")
         self.connect = QPushButton("connect")
         self.connect.setMinimumWidth(150)
 
@@ -217,7 +299,6 @@ class EIOSettings(QFrame):
 
         # layout
         self.layout = QGridLayout()
-        
         self.layout.addWidget(self.label, 0, 0)
         self.layout.addWidget(self.ipLabel, 1, 0)
         self.layout.addWidget(self.ipInput, 1, 1)
@@ -225,13 +306,21 @@ class EIOSettings(QFrame):
         self.layout.addWidget(self.udpInput, 2, 1)
         self.layout.addWidget(self.rangeLabel, 3, 0)
         self.layout.addWidget(self.rangeSelect, 3, 1)
-        self.layout.addWidget(self.connect, 1, 2)
-        self.layout.addWidget(self.statusLabel, 1, 3)
-        self.layout.addWidget(QFrame(self), 0, 4)
+        self.layout.addWidget(self.dacLabel, 1, 2)
+        self.layout.addWidget(self.dacInput, 1, 3)
+        self.layout.addWidget(self.adcLabel, 2, 2)
+        self.layout.addWidget(self.adcInput, 2, 3)
+        self.layout.addWidget(self.quadLabel, 3, 2)
+        self.layout.addWidget(self.quadInput, 3, 3)
+        self.layout.addWidget(self.rateLabel, 1, 4)
+        self.layout.addWidget(self.rateInput, 1, 5)
+        self.layout.addWidget(self.connect, 1, 7)
+        self.layout.addWidget(self.statusLabel, 1, 8)
+        #self.layout.addWidget(QFrame(self), 0, 6)
 
         # stretch the specified column, rather than the other ones
         # temp solution while other columns are not filled in yet
-        self.layout.setColumnStretch(4, 1)
+        self.layout.setColumnStretch(6, 1)
 
         self.setLayout(self.layout)
 
