@@ -104,28 +104,24 @@ class EIOCentralWidget(QWidget):
         self.dacResetAll.clicked.connect(self.resetAll)
         self.dacSelectAll.clicked.connect(self.selectAll)
         self.dacUnSelectAll.clicked.connect(self.unSelectAll)
-        self.settings.dacInput.returnPressed.connect(self.changeDACNumber)
-        self.settings.adcInput.returnPressed.connect(self.changeADCNumber)
-        self.settings.quadInput.returnPressed.connect(self.changeQuadNumber)
+        self.settings.dacInput.valueChanged.connect(self.changeDACNumber)
+        self.settings.adcInput.valueChanged.connect(self.changeADCNumber)
+        self.settings.quadInput.valueChanged.connect(self.changeQuadNumber)
         self.settings.rateInput.returnPressed.connect(self.changePollRate)
 
     def changePollRate(self):
         newRate = float(self.settings.rateInput.text())
         oldRate = self.controller.pollRate
-        if newRate < 0.0 or newRate > 30.0:
+        if newRate < 0.0 or newRate > 100.0:
             # make sure it is within the range
-            self.settings.rateInput.setText("%f"%oldRate)
+            self.settings.rateInput.setText("%0.1f"%oldRate)
         else:
             self.controller.pollRate = newRate
     
     def changeDACNumber(self):
-        newNumber = int(self.settings.dacInput.text())
+        newNumber = self.settings.dacInput.value()
         currentNumber = len(self.dac)
-        if newNumber > 8 or newNumber < 1 :
-            # make sure its in range, 8 is max for now due to etherio
-            # limitation
-            self.settings.dacInput.setText("%d"%currentNumber)
-        elif newNumber > currentNumber:
+        if newNumber > currentNumber:
             # add dacs
             for i in range(currentNumber, newNumber, 1):
                 newDAC = DACGroupBox(i, 0.0)
@@ -139,13 +135,9 @@ class EIOCentralWidget(QWidget):
                 oldDAC.widget().deleteLater()
 
     def changeADCNumber(self):
-        newNumber = int(self.settings.adcInput.text())
+        newNumber = self.settings.adcInput.value()
         currentNumber = len(self.adc)
-        if newNumber > 8 or newNumber < 1 :
-            # make sure its in range, 8 is max for now due to etherio
-            # limitation
-            self.settings.adcInput.setText("%d"%currentNumber)
-        elif newNumber > currentNumber:
+        if newNumber > currentNumber:
             # add adcs
             for i in range(currentNumber, newNumber, 1):
                 newADC = ADCGroupBox(i)
@@ -159,13 +151,9 @@ class EIOCentralWidget(QWidget):
                 oldADC.widget().deleteLater()
 
     def changeQuadNumber(self):
-        newNumber = int(self.settings.quadInput.text())
+        newNumber = self.settings.quadInput.value()
         currentNumber = len(self.quad)
-        if newNumber > 10 or newNumber < 1 :
-            # make sure its in range, 10 is max for now due to etherio
-            # limitation
-            self.settings.quadInput.setText("%d"%currentNumber)
-        elif newNumber > currentNumber:
+        if newNumber > currentNumber:
             # add quads
             for i in range(currentNumber, newNumber, 1):
                 newQuad = QuadGroupBox(i)
@@ -279,22 +267,32 @@ class EIOSettings(QFrame):
         self.rangeSelect.addItems(["-10 to 10", "-10.8 to 10.8", "-5 to 5",
         "0 to 10.8", "0 to 10", "0 to 5"])
         self.dacLabel = QLabel("DAC #:")
-        self.dacInput = QLineEdit("8")
-        self.dacInput.setMaximumWidth(30)
+        self.dacInput = QSpinBox()
+        self.dacInput.setValue(8)
+        self.dacInput.setMaximum(8)
+        self.dacInput.setMinimum(1)
+        self.dacInput.setMaximumWidth(45)
         self.dacInput.setAlignment(Qt.AlignRight)
         self.adcLabel = QLabel("ADC #:")
-        self.adcInput = QLineEdit("8")
-        self.adcInput.setMaximumWidth(30)
+        self.adcInput = QSpinBox()
+        self.adcInput.setValue(8)
+        self.adcInput.setMaximum(8)
+        self.adcInput.setMinimum(1)
+        self.adcInput.setMaximumWidth(45)
         self.adcInput.setAlignment(Qt.AlignRight)
         self.quadLabel = QLabel("Quad #:")
         self.quadInput = QLineEdit("10")
-        self.quadInput.setMaximumWidth(30)
+        self.quadInput = QSpinBox()
+        self.quadInput.setValue(10)
+        self.quadInput.setMaximum(10)
+        self.quadInput.setMinimum(1)
+        self.quadInput.setMaximumWidth(45)
         self.quadInput.setAlignment(Qt.AlignRight)
         self.rateLabel = QLabel("Poll Rate (Hz):")
         self.rateInput = QLineEdit("20")
         self.rateInput.setAlignment(Qt.AlignRight)
         self.rateInput.setMaximumWidth(40)
-        self.reset = QPushButton("reset to default")
+        self.reset = QPushButton("reset to defaults")
         self.connect = QPushButton("connect")
         self.connect.setMinimumWidth(150)
 
@@ -326,6 +324,7 @@ class EIOSettings(QFrame):
         self.layout.addWidget(self.rateInput, 1, 5)
         self.layout.addWidget(self.connect, 1, 7)
         self.layout.addWidget(self.statusLabel, 1, 8)
+        self.layout.addWidget(self.reset, 3, 7, 1, 2)
         #self.layout.addWidget(QFrame(self), 0, 6)
 
         # stretch the specified column, rather than the other ones
@@ -491,6 +490,9 @@ class Controller(QtCore.QObject):
 
         self.keepGoing = True # is this necessary?
         self.pollRate = 20 
+        
+        # gui refresh rate params
+        # TODO: limit gui refresh rate
 
         # observers
         self.DACObservers = []
