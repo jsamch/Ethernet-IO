@@ -4,13 +4,28 @@
 import sys
 from PySide.QtCore import *
 from PySide.QtGui import *
-import unicodedata
-
-from etherio import EtherIO
-
 import time
 import socket
 from threading import Thread
+
+import unicodedata
+from etherio import EtherIO
+
+
+# gloabl defaults
+# TODO: replace with some sort of persistent xml, maybe?
+HOST_IP = '192.168.2.200'
+UDP_PORT = 1234
+DAC_N = 8
+ADC_N = 8
+QE_N = 10
+POLL_RATE = 20
+MAX_POLL_RATE = 30 # low for now, until GUI refresh limitter is added
+
+# slot definitions
+@Slot(bool)
+@Slot(int)
+@Slot(float)
 
 class EIOWindow(QMainWindow):
 
@@ -26,71 +41,249 @@ class EIOCentralWidget(QWidget):
     def __init__(self, parent=None):
         super(EIOCentralWidget, self).__init__(parent)
 
+        # status
+        self.connected = False
+        
         # widgets which will be contained in the central widget
         self.settings = EIOSettings()
 
+        # DACs
         self.dacFrame = QFrame() #QGroupBox("DACs")
         self.dacFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.dac = [DACGroupBox("DAC %d" % i, 0.0) for i in range(8)]
+        self.dac = [DACGroupBox(i, 0.0) for i in range(8)]
+        self.dacButtonFrame = QWidget()
         self.dacSendAll = QPushButton("send ALL")
-        self.dacSendSelected = QPushButton("send SELECTED")
+        # initially disabled
+        self.dacSendAll.setDisabled(True)
+        self.dacResetAll = QPushButton("set ALL to 0.0V")
+        self.dacSelectAll = QPushButton("auto send ALL")
+        self.dacUnSelectAll = QPushButton("auto send NONE")
 
+        # ADCs
         self.adcFrame = QFrame() #QGroupBox("ADCs")
         self.adcFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.adc = [ADCGroupBox("ADC %d" % i) for i in range(8)]
+        self.adc = [ADCGroupBox(i) for i in range(8)]
         
+        # Quads
         self.quadFrame = QFrame() #QGroupBox("Quadratures")
         self.quadFrame.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
-        self.quad = [QuadGroupBox("Quad %d" % i) for i in range(10)]
+        self.quad = [QuadGroupBox(i) for i in range(10)]
 
         # layout of the widgets
         centralLayout = QVBoxLayout()
         centralLayout.setSpacing(0) #spacing between the frames below
-
         centralLayout.addWidget(self.settings)
         centralLayout.addWidget(self.dacFrame, 1)
         centralLayout.addWidget(self.adcFrame)
         centralLayout.addWidget(self.quadFrame)
-        
-        dacLayout = QGridLayout()
+        self.dacLayout = QGridLayout()
         for i in range(len(self.dac)):
-            dacLayout.addWidget(self.dac[i], 0, i)
-        dacLayout.addWidget(self.dacSendAll, 1, 0, 1, 4 )
-        dacLayout.addWidget(self.dacSendSelected, 1, 4, 1, 4 )
-
-        adcLayout = QGridLayout()
+            self.dacLayout.addWidget(self.dac[i], 0, i)
+        self.dacLayout.addWidget(self.dacButtonFrame, 2, 0, 1, len(self.dac))
+        dacButtonLayout = QGridLayout()
+        dacButtonLayout.setContentsMargins(0,0,0,0)
+        dacButtonLayout.addWidget(self.dacSendAll, 0, 0)
+        dacButtonLayout.addWidget(self.dacResetAll, 0, 1)
+        dacButtonLayout.addWidget(self.dacSelectAll, 0, 2)
+        dacButtonLayout.addWidget(self.dacUnSelectAll, 0, 3)
+        self.adcLayout = QGridLayout()
         for i in range(len(self.adc)):
-            adcLayout.addWidget(self.adc[i], 0, i)
-
-        quadLayout = QGridLayout()
+            self.adcLayout.addWidget(self.adc[i], 0, i)
+        self.quadLayout = QGridLayout()
         for i in range(len(self.quad)):
-            quadLayout.addWidget(self.quad[i], 0, i)
-        
+            self.quadLayout.addWidget(self.quad[i], 0, i)
         self.setLayout(centralLayout)
-        self.dacFrame.setLayout(dacLayout)
-        self.adcFrame.setLayout(adcLayout)
-        self.quadFrame.setLayout(quadLayout)
+        self.dacFrame.setLayout(self.dacLayout)
+        self.dacButtonFrame.setLayout(dacButtonLayout)
+        self.adcFrame.setLayout(self.adcLayout)
+        self.quadFrame.setLayout(self.quadLayout)
 
         # controller
         self.controller = Controller()
 
         # signals
         self.settings.connect.clicked.connect(self.connect)
-        
-    def connect(self):
-        self.eio = EtherIO(self.settings.ipInput.text())
-        self.eio.sendFrame()
-
         self.controller.addQEObserver(self.updateQEs)
+        self.controller.addADCObserver(self.updateADCs)
+        self.controller.addDACObserver(self.updateDACs)
+        self.controller.timeout.connect(self.timeout)
+        for i in range(len(self.dac)):
+            self.dac[i].send.connect(self.send)
+        self.dacSendAll.clicked.connect(self.sendAll)
+        self.dacResetAll.clicked.connect(self.resetAll)
+        self.dacSelectAll.clicked.connect(self.selectAll)
+        self.dacUnSelectAll.clicked.connect(self.unSelectAll)
+        self.settings.dacInput.valueChanged.connect(self.changeDACNumber)
+        self.settings.adcInput.valueChanged.connect(self.changeADCNumber)
+        self.settings.quadInput.valueChanged.connect(self.changeQuadNumber)
+        self.settings.rateInput.valueChanged.connect(self.changePollRate)
+        self.settings.reset.clicked.connect(self.resetDefaults)
 
-        self.controller.connectToBoard(self.eio)
+    def resetDefaults(self):
+        # first reset the settings
+        self.settings.ipInput.setText(HOST_IP)
+        self.settings.udpInput.setText("%s"%UDP_PORT)
+        self.settings.rangeSelect.setCurrentIndex(0)
+        self.settings.rateInput.setValue(POLL_RATE)
+        # reset the values of current boxes
+        for i in range(len(self.dac)):
+            if self.dac[i].value != 0:
+                self.dac[i].DACText.setText("%0.3f"%0.0)
+                self.dac[i].DACText.returnPressed.emit()
+                self.dac[i].DACActual.setText("%0.3f"%0.0)
+            self.dac[i].DACSelect.setChecked(False)
+
+        for i in range(len(self.adc)):
+            if self.dac[i].value != 0:
+                self.dac[i].ADCText.clear()
+                self.dac[i].ADCText.setPlaceholderText("%0.3f"%0.0)
+
+        for i in range(len(self.quad)):
+            if self.quad[i].value != 0:
+                self.quad[i].QuadText.clear()
+                self.quad[i].QuadText.setPlaceholderText("%0.3f"%0.0)
+
+        # check if the current number matches the default
+        if self.settings.dacInput.value() != DAC_N:
+            self.settings.dacInput.setValue(DAC_N)
+            self.settings.dacInput.valueChanged.emit()
+        if self.settings.adcInput.value() != ADC_N:
+            self.settings.adcInput.setValue(ADC_N)
+            self.settings.adcInput.valueChanged.emit()
+        if self.settings.quadInput.value() != QE_N:
+            self.settings.quadInput.setValue(QE_N)
+            self.settings.quadInput.valueChanged.emit()
+
+    def changePollRate(self):
+        self.controller.pollRate = self.settings.rateInput.value()
+    
+    def changeDACNumber(self):
+        newNumber = self.settings.dacInput.value()
+        currentNumber = len(self.dac)
+        if newNumber > currentNumber:
+            # add dacs
+            for i in range(currentNumber, newNumber, 1):
+                newDAC = DACGroupBox(i, 0.0)
+                self.dac.append((newDAC))
+                self.dacLayout.addWidget(newDAC, 0, i)
+        elif newNumber < currentNumber:
+            # subtract dacs
+            for i in range(currentNumber, newNumber, -1):
+                oldDAC = self.dacLayout.itemAtPosition(0, i-1)
+                self.dac.pop()
+                oldDAC.widget().deleteLater()
+
+    def changeADCNumber(self):
+        newNumber = self.settings.adcInput.value()
+        currentNumber = len(self.adc)
+        if newNumber > currentNumber:
+            # add adcs
+            for i in range(currentNumber, newNumber, 1):
+                newADC = ADCGroupBox(i)
+                self.adc.append((newADC))
+                self.adcLayout.addWidget(newADC, 0, i)
+        elif newNumber < currentNumber:
+            # subtract adcs
+            for i in range(currentNumber, newNumber, -1):
+                oldADC = self.adcLayout.itemAtPosition(0, i-1)
+                self.adc.pop()
+                oldADC.widget().deleteLater()
+
+    def changeQuadNumber(self):
+        newNumber = self.settings.quadInput.value()
+        currentNumber = len(self.quad)
+        if newNumber > currentNumber:
+            # add quads
+            for i in range(currentNumber, newNumber, 1):
+                newQuad = QuadGroupBox(i)
+                self.quad.append((newQuad))
+                self.quadLayout.addWidget(newQuad, 0, i)
+        elif newNumber < currentNumber:
+            # subtract quads
+            for i in range(currentNumber, newNumber, -1):
+                oldQuad = self.quadLayout.itemAtPosition(0, i-1)
+                self.quad.pop()
+                oldQuad.widget().deleteLater()
+
+    def connect(self):
+        if self.connected == False :
+            self.eio = EtherIO(self.settings.ipInput.text())
+            self.eio.updateDACConfig()
+            # sleep while accepting config
+            time.sleep(0.1)
+            self.controller.connectToBoard(self.eio)
+            self.settings.connect.setText("disconnect")
+            self.settings.ipInput.setDisabled(True)
+            self.settings.udpInput.setDisabled(True)
+            self.settings.rangeSelect.setDisabled(True)
+            self.connected = True
+            for i in range(len(self.dac)):
+                self.dac[i].DACSend.setEnabled(True)
+            self.dacSendAll.setEnabled(True)
+            self.settings.dacInput.setDisabled(True)
+            self.settings.adcInput.setDisabled(True)
+            self.settings.quadInput.setDisabled(True)
+            self.settings.reset.setDisabled(True)
+        else:
+            self.controller.disconnect()
+            self.eio = None
+            self.settings.connect.setText("connect")
+            self.settings.ipInput.setEnabled(True)
+            self.settings.ipInput.setFocus()
+            self.settings.udpInput.setEnabled(True)
+            self.settings.rangeSelect.setEnabled(True)
+            self.connected = False
+            for i in range(len(self.dac)):
+                self.dac[i].DACSend.setDisabled(True)
+            self.dacSendAll.setDisabled(True)
+            self.settings.dacInput.setEnabled(True)
+            self.settings.adcInput.setEnabled(True)
+            self.settings.quadInput.setEnabled(True)
+            self.settings.reset.setEnabled(True)
+
+    def send(self, dac, value):
+        self.eio.DACs[dac].voltage = value
+    
+    def sendAll(self):
+        for i in range(len(self.dac)):
+            self.eio.DACs[i].voltage = self.dac[i].value
+
+    def resetAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACText.setText("%0.3f" % 0.0)
+            self.dac[i].DACText.returnPressed.emit()
+            if self.connected:
+                self.eio.DACs[i].Voltage = self.dac[i].value
+
+    def selectAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACSelect.setChecked(True)
+
+    def unSelectAll(self):
+        for i in range(len(self.dac)):
+            self.dac[i].DACSelect.setChecked(False)
 
     def updateADCs(self, newValues):
-        return
+        for i in range(len(self.adc)):
+            self.adc[i].updateValue(newValues[i].Voltage)
 
     def updateQEs(self, newValues):
         for i in range(len(self.quad)):
             self.quad[i].updateValue(newValues[i].Position)
+
+    def updateDACs(self, currentValues):
+        for i in range(len(self.dac)):
+            self.dac[i].DACActual.setText("%0.3f" % currentValues[i].voltage)
+            
+            # check if we need to send a new value
+            if self.dac[i].DACSelect.isChecked():
+                self.eio.DACs[i].voltage = float(self.dac[i].value)
+
+    def timeout(self, timedout):
+        if timedout :
+            self.settings.statusLabel.setPixmap(self.settings.redFill)
+        else:
+            self.settings.statusLabel.setPixmap(self.settings.greenFill)
 
 class EIOSettings(QFrame):
 
@@ -104,23 +297,60 @@ class EIOSettings(QFrame):
         
         # widgets
         self.label = QLabel("Settings")
-        
         self.ipLabel = QLabel("IP: ")
         self.ipInput = QLineEdit("192.168.2.200")
-
+        self.ipInput.setAlignment(Qt.AlignRight)
         self.udpLabel = QLabel("UDP port: ")
         self.udpInput = QLineEdit("1234")
-
+        self.udpInput.setAlignment(Qt.AlignRight)
         self.rangeLabel = QLabel("DAC range: ")
         self.rangeSelect = QComboBox()
         self.rangeSelect.addItems(["-10 to 10", "-10.8 to 10.8", "-5 to 5",
         "0 to 10.8", "0 to 10", "0 to 5"])
-
+        self.dacLabel = QLabel("DAC #:")
+        self.dacInput = QSpinBox()
+        self.dacInput.setValue(8)
+        self.dacInput.setMaximum(8)
+        self.dacInput.setMinimum(1)
+        self.dacInput.setMaximumWidth(45)
+        self.dacInput.setAlignment(Qt.AlignRight)
+        self.adcLabel = QLabel("ADC #:")
+        self.adcInput = QSpinBox()
+        self.adcInput.setValue(8)
+        self.adcInput.setMaximum(8)
+        self.adcInput.setMinimum(1)
+        self.adcInput.setMaximumWidth(45)
+        self.adcInput.setAlignment(Qt.AlignRight)
+        self.quadLabel = QLabel("Quad #:")
+        self.quadInput = QLineEdit("10")
+        self.quadInput = QSpinBox()
+        self.quadInput.setValue(10)
+        self.quadInput.setMaximum(10)
+        self.quadInput.setMinimum(1)
+        self.quadInput.setMaximumWidth(45)
+        self.quadInput.setAlignment(Qt.AlignRight)
+        self.rateLabel = QLabel("Poll Rate (Hz):")
+        self.rateInput = QSpinBox()
+        self.rateInput.setValue(POLL_RATE)
+        self.rateInput.setMinimum(1)
+        self.rateInput.setMaximum(MAX_POLL_RATE)
+        self.rateInput.setAlignment(Qt.AlignRight)
+        self.rateInput.setMaximumWidth(50)
+        self.reset = QPushButton("reset to defaults")
         self.connect = QPushButton("connect")
+        self.connect.setMinimumWidth(150)
+
+        # flashing connection status button
+        self.statusLabel = QLabel(self)
+        self.redFill = QPixmap(20,20)
+        self.redFill.fill(Qt.red)
+        self.greenFill = QPixmap(20,20)
+        self.greenFill.fill(Qt.green)
+        self.statusLabel.setPixmap(self.redFill)
+        
 
         # layout
         self.layout = QGridLayout()
-        
         self.layout.addWidget(self.label, 0, 0)
         self.layout.addWidget(self.ipLabel, 1, 0)
         self.layout.addWidget(self.ipInput, 1, 1)
@@ -128,25 +358,42 @@ class EIOSettings(QFrame):
         self.layout.addWidget(self.udpInput, 2, 1)
         self.layout.addWidget(self.rangeLabel, 3, 0)
         self.layout.addWidget(self.rangeSelect, 3, 1)
-        self.layout.addWidget(self.connect, 1, 2)
-        self.layout.addWidget(QFrame(self), 0, 3)
-        self.layout.setColumnStretch(3, 1)
+        self.layout.addWidget(self.dacLabel, 1, 2)
+        self.layout.addWidget(self.dacInput, 1, 3)
+        self.layout.addWidget(self.adcLabel, 2, 2)
+        self.layout.addWidget(self.adcInput, 2, 3)
+        self.layout.addWidget(self.quadLabel, 3, 2)
+        self.layout.addWidget(self.quadInput, 3, 3)
+        self.layout.addWidget(self.rateLabel, 2, 5)
+        self.layout.addWidget(self.rateInput, 2, 6)
+        self.layout.addWidget(self.connect, 1, 8)
+        self.layout.addWidget(self.statusLabel, 1, 9)
+        self.layout.addWidget(self.reset, 3, 8, 1, 2)
+        #self.layout.addWidget(QFrame(self), 0, 6)
+
+        # stretch the specified column, rather than the other ones
+        # temp solution while other columns are not filled in yet
+        self.layout.setColumnStretch(4,1)
+        self.layout.setColumnStretch(7,1)
 
         self.setLayout(self.layout)
 
 
 class DACGroupBox(QGroupBox):
 
-    def __init__(self, parent=None, name="DAC #", value=0.0):
-        super(DACGroupBox, self).__init__(parent)
+    # signal definition
+    send = Signal((int, float))
 
-        # DAC value
+    def __init__(self, number, value=0.0):
+        # attributes 
         self.value = value
+        self.number = number
+        self.name = "DAC %d" % number 
         
-        # group box properties
-        #self.setCheckable(True)
-        #self.setDisabled(True)
-
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(DACGroupBox, self).__init__(parent)
+        
         # widgets in the box
         self.DACSlider = QSlider(Qt.Vertical)
         self.DACMaxLabel = QLabel("<font size=2>10.0</font>")
@@ -154,8 +401,12 @@ class DACGroupBox(QGroupBox):
         self.DACMinLabel = QLabel("<font size=2>-10.0</font>")
         self.DACText = QLineEdit()
         self.DACActual = QLineEdit()
+        self.DACActual.setPlaceholderText("%0.3f"%0.0)
         self.DACSelect = QCheckBox()
+        self.DACSelectLabel = QLabel("<font size=2>auto send")
         self.DACSend = QPushButton("send")
+        # initially disable the send buttons
+        self.DACSend.setDisabled(True)
 
         # slider settings
         self.DACSlider.setMinimum(-20)
@@ -163,21 +414,19 @@ class DACGroupBox(QGroupBox):
         self.DACSlider.setTickInterval(10)
         self.DACSlider.setTickPosition(QSlider.TicksLeft)
         self.DACSlider.setMinimumHeight(150)
+        self.DACSlider.setValue(self.value*2.0)
         
-        # line settings
+        # text settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
-
-        # label settings
-
-        # input validator
         self.DACText.setValidator(self.validator)
-        #self.DACText.setInputMask("#00.0000")
-
-        self.DACText.setText("%6.4f" % self.value)
-
+        self.DACText.setAlignment(Qt.AlignRight)
+        self.DACActual.setAlignment(Qt.AlignRight)
+        self.DACText.setText("%0.3f" % self.value)
+        self.DACActual.setDisabled(True)
         # layout
         self.layout = QGridLayout()
+        self.layout.addWidget(self.DACSelectLabel, 0, 0, 1, 0)
         self.layout.addWidget(self.DACSelect, 0, 0, 1, 2, Qt.AlignRight)
         self.layout.addWidget(self.DACSlider, 1, 1, 5, 1, Qt.AlignLeft)
         self.layout.addWidget(self.DACMaxLabel, 1, 0, Qt.AlignRight |
@@ -188,44 +437,49 @@ class DACGroupBox(QGroupBox):
         self.layout.addWidget(self.DACText, 6, 0, 1, 2)
         self.layout.addWidget(self.DACActual, 7, 0, 1, 2)
         self.layout.addWidget(self.DACSend, 8, 0, 1, 2)
-
         self.setLayout(self.layout)
 
         # signals
         self.DACSlider.valueChanged.connect(self.changeValue)
         self.DACText.returnPressed.connect(self.changeValue)
+        self.DACSend.clicked.connect(self.sendValue)
 
+   # TODO: fix so that this can be used to change the value via function call,
+   # right now only works when called by signal from UI
     def changeValue(self, newValue=None):
         if self.sender() == self.DACSlider:
             self.value = self.DACSlider.value()/2.0
-            self.DACText.setText("%6.4f" % self.value)
+            self.DACText.setText("%0.3f" % self.value)
         elif self.sender() == self.DACText:
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
-            self.DACText.setText("%6.4f" % self.value)
-       
+            self.DACText.setText("%0.3f" % self.value)
+    
+    def sendValue(self):
+       self.send.emit(self.number, self.value)
 
 class ADCGroupBox(QGroupBox):
     
-    def __init__(self, parent=None, name="ADC #"):
-        super(ADCGroupBox, self).__init__(parent)
+    def __init__(self, number):
+        # attributes 
+        self.value = 0.0
+        self.number = number
+        self.name = "ADC %d" % self.number
 
-        # ADC value
-        self.value = 0.0;
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(ADCGroupBox, self).__init__(parent)
 
-        # group box properties
-        
         # widgets
         self.ADCText = QLineEdit()
 
-        # line settings
-        self.ADCText.setReadOnly(True)
-        
+        # text settings
         self.validator = QDoubleValidator(-10.0, 10.0, 4, self)
         self.validator.setNotation(QDoubleValidator.StandardNotation)
         self.ADCText.setValidator(self.validator)
-
-        self.ADCText.setPlaceholderText("%6.4f" % self.value)
+        self.ADCText.setAlignment(Qt.AlignRight)
+        self.ADCText.setReadOnly(True)
+        self.ADCText.setPlaceholderText("%0.3f" % self.value)
 
         # layout
         layout = QGridLayout()
@@ -235,22 +489,28 @@ class ADCGroupBox(QGroupBox):
 
     def updateValue(self, newValue):
         self.value = newValue
+        if self.value:
+            self.ADCText.setText("%0.3f" % self.value)
 
 class QuadGroupBox(QGroupBox):
 
-    def __init__(self, parent=None, name="Quad #"):
-        super(QuadGroupBox, self).__init__(parent)
+    def __init__(self, number):
+        # attributes 
+        self.value = 0
+        self.number = number
+        self.name = "Quad %d" % self.number
 
-        # Quad value
-        self.value = 0;
-
-        # group box properties
+        # parent constructor
+        QGroupBox.__init__(self, self.name)
+        #super(QuadGroupBox, self).__init__(parent)
         
         # widgets
         self.QuadText = QLineEdit()
+        self.QuadText.setPlaceholderText("%d"%0)
 
-        # line settings
+        # text settings
         self.QuadText.setReadOnly(True)
+        self.QuadText.setAlignment(Qt.AlignRight)
 
         # layout
         layout = QGridLayout()
@@ -262,14 +522,25 @@ class QuadGroupBox(QGroupBox):
         self.value = newValue
         self.QuadText.setText("%s" % newValue)
 
-class Controller:
-    def __init__(self):
+class Controller(QObject):
+    
+    # define slots
+    timeout = Signal(bool)
+
+    def __init__(self, parent=None):
+        super(Controller, self).__init__(parent)
+
         self.keepGoing = True # is this necessary?
-        self.pollRate = 30
+        self.pollRate = 20 
+        
+        # gui refresh rate params
+        # TODO: limit gui refresh rate
 
         # observers
+        self.DACObservers = []
         self.QEObservers = []
         self.ADCObservers = []
+        self.TimeOutObservers = []
 
         # etherIO object
         self.eio = None
@@ -281,16 +552,30 @@ class Controller:
         self.socketThread.daemon = True
         self.dataThread = Thread(target=self.pollData, args=())
         self.dataThread.daemon = True
-
+        self.keepGoing = True
         self.socketThread.start()
         self.dataThread.start()
 
+    def disconnect(self):
+        self.keepGoing = False
+
+        # wait for the threads to die
+        while(self.socketThread.isAlive() and self.dataThread.isAlive()):
+                None
+        self.eio = None
+
+    def addDACObserver(self, observer):
+        self.DACObservers.append(observer)
 
     def addQEObserver(self, observer):
         self.QEObservers.append(observer)
 
     def addADCObserver(self, observer):
         self.ADCObservers.append(observer)
+
+    # returns True if timout occurs, False otherwise
+    def addTimeOutObserver(self, observer):
+        self.TimeOutObservers.append(observer)
 
     # do we need remove observer methods??
 
@@ -299,9 +584,12 @@ class Controller:
         while(True):            
             if self.keepGoing:
                 try:
-                    rcvcallfunction(TimeOut=0.5/self.pollRate)
+                    rcvcallfunction(TimeOut=1.0/self.pollRate)
+                    # timout did not occur
+                    self.timeout.emit(False)
                 except socket.timeout:
-                    None
+                    # timout occured
+                    self.timeout.emit(True)
             else:
                 break
           
@@ -315,6 +603,9 @@ class Controller:
 
                     for observer in self.QEObservers:
                         observer(self.eio.QEs)
+                    
+                    for observer in self.DACObservers:
+                        observer(self.eio.DACs)
 
                     self.eio.sendFrame()
                 else:
