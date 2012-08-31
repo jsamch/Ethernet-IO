@@ -20,6 +20,7 @@ DAC_N = 8
 ADC_N = 8
 QE_N = 10
 POLL_RATE = 20
+MAX_POLL_RATE = 30 # low for now, until GUI refresh limitter is added
 
 # slot definitions
 @Slot(bool)
@@ -115,7 +116,7 @@ class EIOCentralWidget(QWidget):
         self.settings.dacInput.valueChanged.connect(self.changeDACNumber)
         self.settings.adcInput.valueChanged.connect(self.changeADCNumber)
         self.settings.quadInput.valueChanged.connect(self.changeQuadNumber)
-        self.settings.rateInput.returnPressed.connect(self.changePollRate)
+        self.settings.rateInput.valueChanged.connect(self.changePollRate)
         self.settings.reset.clicked.connect(self.resetDefaults)
 
     def resetDefaults(self):
@@ -123,6 +124,7 @@ class EIOCentralWidget(QWidget):
         self.settings.ipInput.setText(HOST_IP)
         self.settings.udpInput.setText("%s"%UDP_PORT)
         self.settings.rangeSelect.setCurrentIndex(0)
+        self.settings.rateInput.setValue(POLL_RATE)
         # reset the values of current boxes
         for i in range(len(self.dac)):
             if self.dac[i].value != 0:
@@ -153,13 +155,7 @@ class EIOCentralWidget(QWidget):
             self.settings.quadInput.valueChanged.emit()
 
     def changePollRate(self):
-        newRate = float(self.settings.rateInput.text())
-        oldRate = self.controller.pollRate
-        if newRate < 0.0 or newRate > 100.0:
-            # make sure it is within the range
-            self.settings.rateInput.setText("%0.1f"%oldRate)
-        else:
-            self.controller.pollRate = newRate
+        self.controller.pollRate = self.settings.rateInput.value()
     
     def changeDACNumber(self):
         newNumber = self.settings.dacInput.value()
@@ -334,9 +330,12 @@ class EIOSettings(QFrame):
         self.quadInput.setMaximumWidth(45)
         self.quadInput.setAlignment(Qt.AlignRight)
         self.rateLabel = QLabel("Poll Rate (Hz):")
-        self.rateInput = QLineEdit("20")
+        self.rateInput = QSpinBox()
+        self.rateInput.setValue(POLL_RATE)
+        self.rateInput.setMinimum(1)
+        self.rateInput.setMaximum(MAX_POLL_RATE)
         self.rateInput.setAlignment(Qt.AlignRight)
-        self.rateInput.setMaximumWidth(40)
+        self.rateInput.setMaximumWidth(50)
         self.reset = QPushButton("reset to defaults")
         self.connect = QPushButton("connect")
         self.connect.setMinimumWidth(150)
@@ -365,16 +364,17 @@ class EIOSettings(QFrame):
         self.layout.addWidget(self.adcInput, 2, 3)
         self.layout.addWidget(self.quadLabel, 3, 2)
         self.layout.addWidget(self.quadInput, 3, 3)
-        self.layout.addWidget(self.rateLabel, 1, 4)
-        self.layout.addWidget(self.rateInput, 1, 5)
-        self.layout.addWidget(self.connect, 1, 7)
-        self.layout.addWidget(self.statusLabel, 1, 8)
-        self.layout.addWidget(self.reset, 3, 7, 1, 2)
+        self.layout.addWidget(self.rateLabel, 2, 5)
+        self.layout.addWidget(self.rateInput, 2, 6)
+        self.layout.addWidget(self.connect, 1, 8)
+        self.layout.addWidget(self.statusLabel, 1, 9)
+        self.layout.addWidget(self.reset, 3, 8, 1, 2)
         #self.layout.addWidget(QFrame(self), 0, 6)
 
         # stretch the specified column, rather than the other ones
         # temp solution while other columns are not filled in yet
-        self.layout.setColumnStretch(6, 1)
+        self.layout.setColumnStretch(4,1)
+        self.layout.setColumnStretch(7,1)
 
         self.setLayout(self.layout)
 
