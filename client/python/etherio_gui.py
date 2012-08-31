@@ -2,21 +2,29 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from PySide import QtCore
 from PySide.QtCore import *
 from PySide.QtGui import *
-import unicodedata
-
-from etherio import EtherIO
-
 import time
 import socket
 from threading import Thread
 
+import unicodedata
+from etherio import EtherIO
+
+
+# gloabl defaults
+# TODO: replace with some sort of persistent xml, maybe?
+HOST_IP = '192.168.2.200'
+UDP_PORT = 1234
+DAC_N = 8
+ADC_N = 8
+QE_N = 10
+POLL_RATE = 20
+
 # slot definitions
-@QtCore.Slot(bool)
-@QtCore.Slot(int)
-@QtCore.Slot(float)
+@Slot(bool)
+@Slot(int)
+@Slot(float)
 
 class EIOWindow(QMainWindow):
 
@@ -108,6 +116,41 @@ class EIOCentralWidget(QWidget):
         self.settings.adcInput.valueChanged.connect(self.changeADCNumber)
         self.settings.quadInput.valueChanged.connect(self.changeQuadNumber)
         self.settings.rateInput.returnPressed.connect(self.changePollRate)
+        self.settings.reset.clicked.connect(self.resetDefaults)
+
+    def resetDefaults(self):
+        # first reset the settings
+        self.settings.ipInput.setText(HOST_IP)
+        self.settings.udpInput.setText("%s"%UDP_PORT)
+        self.settings.rangeSelect.setCurrentIndex(0)
+        # reset the values of current boxes
+        for i in range(len(self.dac)):
+            if self.dac[i].value != 0:
+                self.dac[i].DACText.setText("%0.3f"%0.0)
+                self.dac[i].DACText.returnPressed.emit()
+                self.dac[i].DACActual.setText("%0.3f"%0.0)
+            self.dac[i].DACSelect.setChecked(False)
+
+        for i in range(len(self.adc)):
+            if self.dac[i].value != 0:
+                self.dac[i].ADCText.clear()
+                self.dac[i].ADCText.setPlaceholderText("%0.3f"%0.0)
+
+        for i in range(len(self.quad)):
+            if self.quad[i].value != 0:
+                self.quad[i].QuadText.clear()
+                self.quad[i].QuadText.setPlaceholderText("%0.3f"%0.0)
+
+        # check if the current number matches the default
+        if self.settings.dacInput.value() != DAC_N:
+            self.settings.dacInput.setValue(DAC_N)
+            self.settings.dacInput.valueChanged.emit()
+        if self.settings.adcInput.value() != ADC_N:
+            self.settings.adcInput.setValue(ADC_N)
+            self.settings.adcInput.valueChanged.emit()
+        if self.settings.quadInput.value() != QE_N:
+            self.settings.quadInput.setValue(QE_N)
+            self.settings.quadInput.valueChanged.emit()
 
     def changePollRate(self):
         newRate = float(self.settings.rateInput.text())
@@ -184,6 +227,7 @@ class EIOCentralWidget(QWidget):
             self.settings.dacInput.setDisabled(True)
             self.settings.adcInput.setDisabled(True)
             self.settings.quadInput.setDisabled(True)
+            self.settings.reset.setDisabled(True)
         else:
             self.controller.disconnect()
             self.eio = None
@@ -199,6 +243,7 @@ class EIOCentralWidget(QWidget):
             self.settings.dacInput.setEnabled(True)
             self.settings.adcInput.setEnabled(True)
             self.settings.quadInput.setEnabled(True)
+            self.settings.reset.setEnabled(True)
 
     def send(self, dac, value):
         self.eio.DACs[dac].voltage = value
@@ -337,7 +382,7 @@ class EIOSettings(QFrame):
 class DACGroupBox(QGroupBox):
 
     # signal definition
-    send = QtCore.Signal((int, float))
+    send = Signal((int, float))
 
     def __init__(self, number, value=0.0):
         # attributes 
@@ -399,6 +444,8 @@ class DACGroupBox(QGroupBox):
         self.DACText.returnPressed.connect(self.changeValue)
         self.DACSend.clicked.connect(self.sendValue)
 
+   # TODO: fix so that this can be used to change the value via function call,
+   # right now only works when called by signal from UI
     def changeValue(self, newValue=None):
         if self.sender() == self.DACSlider:
             self.value = self.DACSlider.value()/2.0
@@ -407,11 +454,6 @@ class DACGroupBox(QGroupBox):
             self.value = (float)(self.DACText.text())
             self.DACSlider.setValue(self.value*2.0)
             self.DACText.setText("%0.3f" % self.value)
-        else:
-            # change from the outside
-            self.value = newValue
-            self.DACText.setText("0.3f" % self.value)
-            self.DACSlider.setValue(self.value*2.0)
     
     def sendValue(self):
        self.send.emit(self.number, self.value)
@@ -480,10 +522,10 @@ class QuadGroupBox(QGroupBox):
         self.value = newValue
         self.QuadText.setText("%s" % newValue)
 
-class Controller(QtCore.QObject):
+class Controller(QObject):
     
     # define slots
-    timeout = QtCore.Signal(bool)
+    timeout = Signal(bool)
 
     def __init__(self, parent=None):
         super(Controller, self).__init__(parent)
