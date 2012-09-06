@@ -27,9 +27,19 @@ CTRL_FRAMETYPE_DAC_CFG  = 0x05 # DAC Configuration
 CTRL_FRAMETYPE_ERROR    = 0xF0 # Error Frame (Error string)
 
 class EtherIO:
+    """
+    Ethernet IO Network Abstraction Class
+    @author Jean-Samuel Chenard
+    """
     def __init__(self, EIO_IP, Host_IP='0.0.0.0',
                                EIO_Port = IO_UDP_PORT, 
                                Host_Port = IO_UDP_PORT):
+        """
+        @param EIO_IP
+        @param Host_IP
+        @param EIO_Port
+        @param Host_Port
+        """
         self.EIO_IP     = EIO_IP
         self.EIO_Port   = EIO_Port
         self.Host_IP    = Host_IP
@@ -62,10 +72,19 @@ class EtherIO:
 
     # Call this method when you modify the DAC range or enable status
     def updateDACConfig(self):
+        """
+        This method is called to update the DAC configuration and should be
+        called when the DAC range or the enable status is modified.
+        """
         self.sendFrame(frameType = CTRL_FRAMETYPE_DAC_CFG)
         
     # Send a control or data frame to the EtherIO box
     def sendFrame(self, frameType = CTRL_FRAMETYPE_IOUPDATE, magic = MAGIC_ID):
+        """
+        Send a control or data from to the EtherIO box
+        @param frameType
+        @param magic
+        """
         frameTypeByte = (frameType)       
         header = struct.pack("!ccBBH", magic, VERSION, frameTypeByte, 
                                        self.pad, self.curSeq  )
@@ -96,6 +115,7 @@ class EtherIO:
         #print "Sending to %s(%d)" % (self.IPAddr, self.port)
         #print binascii.hexlify(packet)
         self.curSeq += 1
+        self.curSeq = self.curSeq % 65536
 
 
         self.sock.sendto( packet, (self.EIO_IP, self.EIO_Port) )
